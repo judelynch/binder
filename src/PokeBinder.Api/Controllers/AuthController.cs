@@ -1,0 +1,95 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using PokeBinder.Api.Dtos;
+using PokeBinder.Core.Identity;
+
+namespace PokeBinder.Api.Controllers;
+
+[ApiController]
+[Route("api/auth")]
+public class AuthController : ControllerBase
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ITokenService _tokenService;
+
+    public AuthController(UserManager<ApplicationUser> userManager, ITokenService tokenService)
+    {
+        _userManager = userManager;
+        _tokenService = tokenService;
+    }
+
+    [HttpPost("register")]
+    public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
+    {
+        var existing = await _userManager.FindByEmailAsync(request.Email);
+        if (existing is not null)
+        {
+            return Conflict(new { message = "An account with this email already exists." });
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = request.Email,
+            Email = request.Email
+        };
+
+        var result = await _userManager.CreateAsync(user, request.Password);
+        if (!result.Succeeded)
+        {
+            return ValidationProblem(BuildModelState(result));
+        }
+
+        await _userManager.AddToRoleAsync(user, Roles.User);
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var token = _tokenService.CreateAccessToken(user, roles);
+
+        return Ok(new AuthResponse(token, user.Id, user.Email!, roles.ToList()));
+    }
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null || !await _userManager.CheckPasswordAsync(user, request.Password))
+        {
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var token = _tokenService.CreateAccessToken(user, roles);
+
+        return Ok(new AuthResponse(token, user.Id, user.Email!, roles.ToList()));
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<ActionResult<MeResponse>> Me()
+    {
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        return Ok(new MeResponse(user.Id, user.Email!, roles.ToList()));
+    }
+
+    private static Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary BuildModelState(IdentityResult result)
+    {
+        var modelState = new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary();
+        foreach (var error in result.Errors)
+        {
+            modelState.AddModelError(error.Code, error.Description);
+        }
+        return modelState;
+    }
+}
