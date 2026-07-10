@@ -3,10 +3,15 @@
 A multi-user Pokémon TCG binder collection website. See `CLAUDE.md` for the full
 architecture and phase plan.
 
-## Phase 0 status
+## Status
 
-Solution scaffold, EF Core + SQL Server, ASP.NET Core Identity with roles, JWT auth,
-and a React shell that can register/log in. No card or binder features yet.
+- **Phase 0**: Solution scaffold, EF Core + SQL Server, ASP.NET Core Identity with
+  roles, JWT auth, and a React shell that can register/log in.
+- **Phase 1**: Full card reference schema (Set/Card/VariantType/CardVariant) seeded
+  from the [PokemonTCG/pokemon-tcg-data](https://github.com/PokemonTCG/pokemon-tcg-data)
+  dataset — see "Card data" below. Read-only `/api/sets` and `/api/cards` endpoints.
+
+No binder features yet (Phase 2).
 
 ## Prerequisites
 
@@ -62,17 +67,44 @@ API's HTTPS URL above.
 Open `http://localhost:5173`, register a new account, or log in with the seeded
 admin credentials to see the Admin sidebar link.
 
+## Card data (Phase 1)
+
+The card reference schema (Set, Card, VariantType, CardVariant) is seeded from the
+[PokemonTCG/pokemon-tcg-data](https://github.com/PokemonTCG/pokemon-tcg-data) GitHub
+repo's `sets/en.json` and `cards/en/*.json`. The importer is idempotent — safe to
+re-run any time; re-running with no upstream changes adds/updates nothing.
+
+**Run it from the command line** (downloads the repo as a tarball by default):
+```
+dotnet run --project src/PokeBinder.Api -- seed
+```
+This can take about a minute (173 sets, ~20,300 cards) and prints a summary of
+sets/cards added vs. updated. To import from a local clone instead of downloading,
+set `CardData:LocalPath` (e.g. via the `CardData__LocalPath` environment variable)
+to the root of a `pokemon-tcg-data` checkout.
+
+**Or trigger it via the API** as an admin: `POST /api/admin/sync` (requires an
+Admin-role bearer token), which runs the same importer and returns the summary as
+JSON. There's no admin UI for this yet — that's Phase 6.
+
+Card numbers are sorted using a scheme validated against the full real dataset
+(`NumberSortKeyCalculator` in `PokeBinder.Core`) — plain numerics first ("1", "2",
+"28", "28a"), then letter-prefixed groups like "RC1"/"TG12" in their own numeric
+order, then pure-letter cards ("A".."Z"), then anything else, as a last-resort
+fallback. See `GET /api/sets/{id}/cards` for the sorted, paginated result.
+
 ## Tests
 
 ```
 dotnet test
 ```
 
-The integration smoke test (`tests/PokeBinder.Tests/AuthFlowTests.cs`) exercises
-register → login → `/api/auth/me` against a real SQL Server database named
-`PokeBinderTest` on the same local instance. It drops and recreates that database
-on every run, so no manual setup is needed beyond having the SQL Server instance
-reachable — just don't point `PokeBinderTest` at anything you care about.
+Integration tests run against real SQL Server databases on the same local instance
+(`PokeBinderTest`, `PokeBinderTest_CardImport`, `PokeBinderTest_Ordering`), each
+dropped and recreated on every run — no manual setup needed beyond having the SQL
+Server instance reachable, and don't point any `PokeBinderTest*` database at
+anything you care about. Card-data tests import a small fixture dataset from
+`tests/PokeBinder.Tests/Fixtures/CardData` rather than the real GitHub repo.
 
 ## Project layout
 

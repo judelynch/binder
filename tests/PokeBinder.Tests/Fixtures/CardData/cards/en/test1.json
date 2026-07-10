@@ -1,0 +1,46 @@
+[
+  {
+    "id": "test1-1",
+    "name": "Card One",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Fire"],
+    "number": "1",
+    "artist": "Artist A",
+    "rarity": "Common",
+    "nationalPokedexNumbers": [1],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test1/1.png", "large": "https://images.pokemontcg.io/test1/1_hires.png" }
+  },
+  {
+    "id": "test1-2",
+    "name": "Card Two",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Water"],
+    "number": "2",
+    "artist": "Artist A",
+    "rarity": "Common",
+    "nationalPokedexNumbers": [2],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test1/2.png", "large": "https://images.pokemontcg.io/test1/2_hires.png" }
+  },
+  {
+    "id": "test1-3",
+    "name": "Card Three",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Grass"],
+    "number": "3",
+    "artist": "Artist A",
+    "rarity": "Rare Holo",
+    "nationalPokedexNumbers": [3],
+    "legalities": { "unlimited": "Legal" },
+    "attacks": [
+      { "name": "Vine Whip", "cost": ["Grass", "Colorless"], "convertedEnergyCost": 2, "damage": "30", "text": "" }
+    ],
+    "weaknesses": [{ "type": "Fire", "value": "×2" }],
+    "retreatCost": ["Colorless"],
+    "images": { "small": "https://images.pokemontcg.io/test1/3.png", "large": "https://images.pokemontcg.io/test1/3_hires.png" }
+  }
+]

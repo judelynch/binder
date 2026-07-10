@@ -2,9 +2,11 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using PokeBinder.Core.Identity;
 using PokeBinder.Infrastructure;
+using PokeBinder.Infrastructure.Cards.Import;
 using PokeBinder.Infrastructure.Identity;
 using PokeBinder.Infrastructure.Seed;
 
@@ -55,6 +57,22 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+builder.Services.Configure<CardDataImportOptions>(builder.Configuration.GetSection(CardDataImportOptions.SectionName));
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<ICardDataSource>(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<CardDataImportOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(options.LocalPath))
+    {
+        return new LocalDirectoryCardDataSource(options.LocalPath);
+    }
+
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+    httpClient.Timeout = TimeSpan.FromMinutes(5);
+    return new GitHubTarballCardDataSource(httpClient, options.TarballUrl);
+});
+builder.Services.AddScoped<CardDataImporter>();
+
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
 {
@@ -67,6 +85,17 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+if (args.Contains("seed"))
+{
+    using var seedScope = app.Services.CreateScope();
+    var importer = seedScope.ServiceProvider.GetRequiredService<CardDataImporter>();
+    var summary = await importer.RunAsync();
+    Console.WriteLine($"Sets added: {summary.SetsAdded}, updated: {summary.SetsUpdated}");
+    Console.WriteLine($"Cards added: {summary.CardsAdded}, updated: {summary.CardsUpdated}");
+    Console.WriteLine($"Elapsed: {summary.Elapsed}");
+    return;
+}
 
 if (app.Environment.IsDevelopment())
 {
