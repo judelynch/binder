@@ -10,8 +10,12 @@ architecture and phase plan.
 - **Phase 1**: Full card reference schema (Set/Card/VariantType/CardVariant) seeded
   from the [PokemonTCG/pokemon-tcg-data](https://github.com/PokemonTCG/pokemon-tcg-data)
   dataset — see "Card data" below. Read-only `/api/sets` and `/api/cards` endpoints.
+- **Phase 2**: Binder backend — CRUD, pages/spreads, slots, bulk-assign, overlay
+  tags, and a dashboard endpoint. Binder page counts are always even (pages exist
+  in physical sheet-pairs, matching a real binder leaf); `DELETE .../pages/{n}`
+  removes the whole sheet a page belongs to, not a single page.
 
-No binder features yet (Phase 2).
+No frontend for binders/cards yet (later phase).
 
 ## Prerequisites
 
@@ -100,11 +104,13 @@ dotnet test
 ```
 
 Integration tests run against real SQL Server databases on the same local instance
-(`PokeBinderTest`, `PokeBinderTest_CardImport`, `PokeBinderTest_Ordering`), each
-dropped and recreated on every run — no manual setup needed beyond having the SQL
-Server instance reachable, and don't point any `PokeBinderTest*` database at
-anything you care about. Card-data tests import a small fixture dataset from
-`tests/PokeBinder.Tests/Fixtures/CardData` rather than the real GitHub repo.
+(`PokeBinderTest`, `PokeBinderTest_CardImport`, `PokeBinderTest_Ordering`,
+`PokeBinderTest_Binders`), each dropped and recreated on every run — no manual
+setup needed beyond having the SQL Server instance reachable, and don't point any
+`PokeBinderTest*` database at anything you care about. Card-data tests import a
+small fixture dataset from `tests/PokeBinder.Tests/Fixtures/CardData` rather than
+the real GitHub repo; binder tests seed a few minimal Card/CardVariant rows
+directly (`CardFixture.cs`) rather than running the real importer.
 
 ## Project layout
 

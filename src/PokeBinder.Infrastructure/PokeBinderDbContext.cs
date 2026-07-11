@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using PokeBinder.Core.Binders;
 using PokeBinder.Core.Cards;
 using PokeBinder.Core.Identity;
 
@@ -17,6 +18,11 @@ public class PokeBinderDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CardPokedexNumber> CardPokedexNumbers { get; set; } = null!;
     public DbSet<VariantType> VariantTypes { get; set; } = null!;
     public DbSet<CardVariant> CardVariants { get; set; } = null!;
+
+    public DbSet<Binder> Binders { get; set; } = null!;
+    public DbSet<BinderPage> BinderPages { get; set; } = null!;
+    public DbSet<BinderSlot> BinderSlots { get; set; } = null!;
+    public DbSet<OverlayTag> OverlayTags { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
