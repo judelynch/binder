@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { RequireAdmin } from './components/RequireAdmin'
 import { AdminPage } from './pages/AdminPage'
+import { BinderDetailPage } from './pages/BinderDetailPage'
 import { BindersPage } from './pages/BindersPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
@@ -18,6 +19,7 @@ function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/binders" element={<BindersPage />} />
+          <Route path="/binders/:id" element={<BinderDetailPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminPage />} />
           </Route>

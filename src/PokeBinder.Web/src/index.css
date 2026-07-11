@@ -1,5 +1,63 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Fraunces";
+  src: url("./assets/fonts/Fraunces-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("./assets/fonts/Fraunces-Italic-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url("./assets/fonts/WorkSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url("./assets/fonts/WorkSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * "Case Display" — the app's one and only theme (deliberately single-theme,
+ * see Phase 3 design grill): a deep forest-black display case with brass
+ * foil accents. No light mode / prefers-color-scheme handling by design.
+ */
+@theme {
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body: "Work Sans", system-ui, sans-serif;
+
+  --color-canvas: #141f1a;
+  --color-surface: #1d2b24;
+  --color-surface-2: #24352c;
+  --color-ink: #efe8d6;
+  --color-ink-soft: #a8b3a8;
+  --color-ink-faint: #6f7c73;
+  --color-accent: #d9a441;
+  --color-accent-ink: #14201a;
+  --color-border: #33443a;
+  --color-good: #7fae7a;
+  --color-bad: #d9765f;
+}
+
 body {
   margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
