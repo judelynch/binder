@@ -107,6 +107,10 @@ public class CardDataImporter
             var cardIds = dtos.Select(d => d.Id).ToList();
             var existingCards = await _db.Cards
                 .Include(c => c.PokedexNumbers)
+                .Include(c => c.TypeRows)
+                .Include(c => c.SubtypeRows)
+                .Include(c => c.WeaknessTypeRows)
+                .Include(c => c.ResistanceTypeRows)
                 .Where(c => cardIds.Contains(c.Id))
                 .ToDictionaryAsync(c => c.Id, ct);
 
@@ -135,6 +139,10 @@ public class CardDataImporter
                 }
 
                 ReconcilePokedexNumbers(card, dto.NationalPokedexNumbers);
+                ReconcileJoinRows(card.TypeRows, card.Types, t => t.Type, v => new CardType { CardId = card.Id, Type = v });
+                ReconcileJoinRows(card.SubtypeRows, card.Subtypes, s => s.Subtype, v => new CardSubtype { CardId = card.Id, Subtype = v });
+                ReconcileJoinRows(card.WeaknessTypeRows, card.Weaknesses.Select(w => w.Type), w => w.Type, v => new CardWeaknessType { CardId = card.Id, Type = v });
+                ReconcileJoinRows(card.ResistanceTypeRows, card.Resistances.Select(r => r.Type), r => r.Type, v => new CardResistanceType { CardId = card.Id, Type = v });
 
                 if (!hasNormalVariant.Contains(dto.Id))
                 {
@@ -176,6 +184,7 @@ public class CardDataImporter
         card.Subtypes = dto.Subtypes;
         card.Level = dto.Level;
         card.Hp = dto.Hp;
+        card.HpValue = int.TryParse(dto.Hp, out var hpValue) ? hpValue : null;
         card.Types = dto.Types;
         card.EvolvesFrom = dto.EvolvesFrom;
         card.Abilities = dto.Abilities.Select(a => new Ability(a.Name, a.Text, a.Type)).ToList();
@@ -199,6 +208,32 @@ public class CardDataImporter
         card.Legalities = dto.Legalities;
         card.ImageSmallUrl = dto.Images?.Small;
         card.ImageLargeUrl = dto.Images?.Large;
+    }
+
+    private static void ReconcileJoinRows<TJoin>(
+        ICollection<TJoin> current,
+        IEnumerable<string> desiredValues,
+        Func<TJoin, string> getValue,
+        Func<string, TJoin> create)
+    {
+        var desired = new HashSet<string>(desiredValues);
+
+        foreach (var existing in current.ToList())
+        {
+            if (!desired.Contains(getValue(existing)))
+            {
+                current.Remove(existing);
+            }
+        }
+
+        var currentValues = new HashSet<string>(current.Select(getValue));
+        foreach (var value in desired)
+        {
+            if (!currentValues.Contains(value))
+            {
+                current.Add(create(value));
+            }
+        }
     }
 
     private static void ReconcilePokedexNumbers(Card card, List<int> numbers)

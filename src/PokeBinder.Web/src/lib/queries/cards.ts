@@ -44,15 +44,11 @@ export function useSets() {
   })
 }
 
-export function useSetCards(setId: string | null, name: string) {
+/** Fetches every card in a set in one request, for the master-set checklist (largest real set is 304 cards). */
+export function useFullSetCards(setId: string | null) {
   return useQuery({
-    queryKey: ['set-cards', setId, name],
-    queryFn: async () =>
-      (
-        await api.get<PagedResult<CardSummary>>(`/sets/${setId}/cards`, {
-          params: { name: name || undefined, pageSize: 30 },
-        })
-      ).data,
+    queryKey: ['set-cards-full', setId],
+    queryFn: async () => (await api.get<PagedResult<CardSummary>>(`/sets/${setId}/cards`, { params: { pageSize: 500 } })).data,
     enabled: setId !== null,
   })
 }

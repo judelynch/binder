@@ -45,3 +45,15 @@ public record CardDetailDto(
     IReadOnlyList<string> VariantTypeNames);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
+
+public record CardSearchResultDto(
+    string Id,
+    string SetId,
+    string SetName,
+    string Name,
+    string Number,
+    string? Rarity,
+    string Supertype,
+    string? ImageSmallUrl,
+    string? ImageLargeUrl,
+    IReadOnlyList<VariantSummaryDto> Variants);

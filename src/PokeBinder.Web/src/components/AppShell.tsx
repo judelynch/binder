@@ -16,6 +16,9 @@ function NavLinks({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate?: () =
       <NavLink to="/binders" className={navLinkClasses} onClick={onNavigate}>
         Binders
       </NavLink>
+      <NavLink to="/cards" className={navLinkClasses} onClick={onNavigate}>
+        Cards
+      </NavLink>
       {isAdmin && (
         <NavLink to="/admin" className={navLinkClasses} onClick={onNavigate}>
           Admin

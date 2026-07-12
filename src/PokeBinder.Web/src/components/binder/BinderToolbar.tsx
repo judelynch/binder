@@ -13,6 +13,7 @@ export function BinderToolbar({
   overlaysEnabled,
   onToggleOverlays,
   onAddPages,
+  onBuildSet,
   overlayTags,
 }: {
   binderName: string
@@ -27,6 +28,7 @@ export function BinderToolbar({
   overlaysEnabled: boolean
   onToggleOverlays: () => void
   onAddPages: () => void
+  onBuildSet: () => void
   overlayTags: OverlayTag[]
 }) {
   return (
@@ -93,6 +95,13 @@ export function BinderToolbar({
             className="rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-semibold text-accent-ink"
           >
             + Add pages
+          </button>
+          <button
+            type="button"
+            onClick={onBuildSet}
+            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-ink-soft hover:text-ink"
+          >
+            Populate from set
           </button>
         </div>
       </div>

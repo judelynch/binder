@@ -36,7 +36,7 @@ public class SetsController : ControllerBase
         string id, [FromQuery] string? name = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
     {
         page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, 250);
+        pageSize = Math.Clamp(pageSize, 1, 500); // 500 comfortably covers the largest real set (swshp, 304 cards) for the master-set checklist
 
         var setExists = await _db.Sets.AnyAsync(s => s.Id == id, ct);
         if (!setExists)

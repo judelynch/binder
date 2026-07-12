@@ -181,7 +181,8 @@ public class SlotsController : ControllerBase
     }
 
     [HttpPost("bulk-assign")]
-    public async Task<ActionResult<BulkAssignResultDto>> BulkAssign(Guid binderId, BulkAssignRequest request, CancellationToken ct)
+    public async Task<ActionResult<BulkAssignResultDto>> BulkAssign(
+        Guid binderId, BulkAssignRequest request, [FromQuery] bool dryRun, CancellationToken ct)
     {
         if (!Enum.TryParse<OccupiedStrategy>(request.OccupiedStrategy, ignoreCase: true, out var strategy))
         {
@@ -248,7 +249,14 @@ public class SlotsController : ControllerBase
             slot.Condition = null;
         }
 
-        await _db.SaveChangesAsync(ct);
+        // Dry run: every step above (including auto-appending pages) has already run against the
+        // tracked change graph, so the counts below are exactly what a real call would produce —
+        // we just never call SaveChangesAsync, so nothing is written and the DbContext discards
+        // the tracked changes when the request scope ends.
+        if (!dryRun)
+        {
+            await _db.SaveChangesAsync(ct);
+        }
 
         return Ok(new BulkAssignResultDto(plan.Placements.Count, plan.SkippedOccupiedSlots, pagesAdded));
     }

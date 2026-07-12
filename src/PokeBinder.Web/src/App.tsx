@@ -5,6 +5,7 @@ import { RequireAdmin } from './components/RequireAdmin'
 import { AdminPage } from './pages/AdminPage'
 import { BinderDetailPage } from './pages/BinderDetailPage'
 import { BindersPage } from './pages/BindersPage'
+import { CardsPage } from './pages/CardsPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -20,6 +21,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/binders" element={<BindersPage />} />
           <Route path="/binders/:id" element={<BinderDetailPage />} />
+          <Route path="/cards" element={<CardsPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminPage />} />
           </Route>

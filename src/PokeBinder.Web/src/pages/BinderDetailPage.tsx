@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { AddCardPanel } from '../components/binder/AddCardPanel'
 import { BinderFrame } from '../components/binder/BinderFrame'
 import { BinderToolbar } from '../components/binder/BinderToolbar'
 import { SlotActionPanel } from '../components/binder/SlotActionPanel'
 import { Modal } from '../components/Modal'
+import { SearchSlideOver } from '../components/search/SearchSlideOver'
+import { SetChecklistPanel } from '../components/search/SetChecklistPanel'
 import { useBinder } from '../lib/queries/binders'
 import { useOverlayTags } from '../lib/queries/overlay-tags'
 import { useAppendPages, useMoveSlot, useSpread } from '../lib/queries/spread'
@@ -63,6 +64,7 @@ export function BinderDetailPage() {
   const [selectedSlot, setSelectedSlot] = useState<BinderSlot | null>(null)
   const [addCardSlotId, setAddCardSlotId] = useState<string | null>(null)
   const [addingPages, setAddingPages] = useState(false)
+  const [buildingSet, setBuildingSet] = useState(false)
 
   const spreadIndex = Math.floor(panelIndex / 2)
   const side = panelIndexToLocation(panelIndex).side
@@ -148,6 +150,7 @@ export function BinderDetailPage() {
         overlaysEnabled={overlaysEnabled}
         onToggleOverlays={() => setOverlaysEnabled((v) => !v)}
         onAddPages={() => setAddingPages(true)}
+        onBuildSet={() => setBuildingSet(true)}
         overlayTags={overlayTags ?? []}
       />
       <BinderFrame
@@ -171,14 +174,10 @@ export function BinderDetailPage() {
         />
       )}
       {addCardSlotId && (
-        <AddCardPanel
-          binderId={binderId}
-          spreadIndex={spreadIndex}
-          slotId={addCardSlotId}
-          onClose={() => setAddCardSlotId(null)}
-        />
+        <SearchSlideOver binderId={binderId} startSlotId={addCardSlotId} onClose={() => setAddCardSlotId(null)} />
       )}
       {addingPages && <AddPagesModal binderId={binderId} onClose={() => setAddingPages(false)} />}
+      {buildingSet && <SetChecklistPanel defaultBinderId={binderId} onClose={() => setBuildingSet(false)} />}
     </div>
   )
 }

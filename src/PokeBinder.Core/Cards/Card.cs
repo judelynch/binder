@@ -11,6 +11,9 @@ public class Card
     public IReadOnlyList<string> Subtypes { get; set; } = Array.Empty<string>();
     public string? Level { get; set; }
     public string? Hp { get; set; }
+
+    /// <summary>Hp parsed to an int at import time (null if unparseable), so range filters can use a real indexed column instead of casting the string Hp at query time.</summary>
+    public int? HpValue { get; set; }
     public IReadOnlyList<string> Types { get; set; } = Array.Empty<string>();
     public string? EvolvesFrom { get; set; }
     public IReadOnlyList<Ability> Abilities { get; set; } = Array.Empty<Ability>();
@@ -40,4 +43,8 @@ public class Card
 
     public ICollection<CardPokedexNumber> PokedexNumbers { get; set; } = new List<CardPokedexNumber>();
     public ICollection<CardVariant> Variants { get; set; } = new List<CardVariant>();
+    public ICollection<CardType> TypeRows { get; set; } = new List<CardType>();
+    public ICollection<CardSubtype> SubtypeRows { get; set; } = new List<CardSubtype>();
+    public ICollection<CardWeaknessType> WeaknessTypeRows { get; set; } = new List<CardWeaknessType>();
+    public ICollection<CardResistanceType> ResistanceTypeRows { get; set; } = new List<CardResistanceType>();
 }

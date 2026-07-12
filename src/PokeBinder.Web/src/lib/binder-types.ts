@@ -40,3 +40,9 @@ export interface UpdateBinderInput {
   name?: string
   colourHex?: string
 }
+
+export interface BulkAssignResult {
+  placed: number
+  skipped: number
+  pagesAdded: number
+}

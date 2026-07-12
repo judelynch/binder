@@ -46,6 +46,8 @@ public class CardConfiguration : IEntityTypeConfiguration<Card>
         builder.HasIndex(c => c.Supertype);
         builder.HasIndex(c => c.Artist);
         builder.HasIndex(c => c.RegulationMark);
+        builder.HasIndex(c => c.HpValue);
+        builder.HasIndex(c => c.ConvertedRetreatCost);
         builder.HasIndex(c => new { c.SetId, c.NumberSortGroup, c.NumberSortPrefix, c.NumberSortValue, c.NumberSortSuffix })
             .HasDatabaseName("IX_Card_Set_NumberSortKey");
 
@@ -57,6 +59,26 @@ public class CardConfiguration : IEntityTypeConfiguration<Card>
         builder.HasMany(c => c.Variants)
             .WithOne(v => v.Card)
             .HasForeignKey(v => v.CardId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.TypeRows)
+            .WithOne(t => t.Card)
+            .HasForeignKey(t => t.CardId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.SubtypeRows)
+            .WithOne(s => s.Card)
+            .HasForeignKey(s => s.CardId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.WeaknessTypeRows)
+            .WithOne(w => w.Card)
+            .HasForeignKey(w => w.CardId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.ResistanceTypeRows)
+            .WithOne(r => r.Card)
+            .HasForeignKey(r => r.CardId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

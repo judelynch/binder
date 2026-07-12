@@ -18,6 +18,10 @@ public class PokeBinderDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CardPokedexNumber> CardPokedexNumbers { get; set; } = null!;
     public DbSet<VariantType> VariantTypes { get; set; } = null!;
     public DbSet<CardVariant> CardVariants { get; set; } = null!;
+    public DbSet<CardType> CardTypes { get; set; } = null!;
+    public DbSet<CardSubtype> CardSubtypes { get; set; } = null!;
+    public DbSet<CardWeaknessType> CardWeaknessTypes { get; set; } = null!;
+    public DbSet<CardResistanceType> CardResistanceTypes { get; set; } = null!;
 
     public DbSet<Binder> Binders { get; set; } = null!;
     public DbSet<BinderPage> BinderPages { get; set; } = null!;
