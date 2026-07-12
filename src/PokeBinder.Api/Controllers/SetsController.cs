@@ -33,7 +33,7 @@ public class SetsController : ControllerBase
 
     [HttpGet("{id}/cards")]
     public async Task<ActionResult<PagedResult<CardSummaryDto>>> GetSetCards(
-        string id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
+        string id, [FromQuery] string? name = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
     {
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 250);
@@ -44,8 +44,14 @@ public class SetsController : ControllerBase
             return NotFound();
         }
 
-        var query = _db.Cards
-            .Where(c => c.SetId == id)
+        var query = _db.Cards.Where(c => c.SetId == id);
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            query = query.Where(c => EF.Functions.Like(c.Name, $"%{name}%"));
+        }
+
+        query = query
             .OrderBy(c => c.NumberSortGroup)
             .ThenBy(c => c.NumberSortPrefix)
             .ThenBy(c => c.NumberSortValue)
@@ -58,7 +64,8 @@ public class SetsController : ControllerBase
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(c => new CardSummaryDto(
-                c.Id, c.SetId, c.Name, c.Number, c.Rarity, c.Supertype, c.ImageSmallUrl, c.ImageLargeUrl))
+                c.Id, c.SetId, c.Name, c.Number, c.Rarity, c.Supertype, c.ImageSmallUrl, c.ImageLargeUrl,
+                c.Variants.Select(v => new VariantSummaryDto(v.Id, v.VariantType!.Name)).ToList()))
             .ToListAsync(ct);
 
         return Ok(new PagedResult<CardSummaryDto>(items, page, pageSize, totalCount));

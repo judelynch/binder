@@ -12,6 +12,13 @@ export function useBinders() {
   })
 }
 
+export function useBinder(id: string) {
+  return useQuery({
+    queryKey: [...bindersKey, id],
+    queryFn: async () => (await api.get<BinderSummary>(`/binders/${id}`)).data,
+  })
+}
+
 export function useDashboard() {
   return useQuery({
     queryKey: dashboardKey,

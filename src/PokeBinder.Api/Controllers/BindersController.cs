@@ -68,6 +68,32 @@ public class BindersController : ControllerBase
         return Ok(binders);
     }
 
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<BinderSummaryDto>> GetById(Guid id, CancellationToken ct)
+    {
+        var userId = this.GetUserId();
+
+        var binder = await _db.Binders
+            .Where(b => b.Id == id && b.OwnerId == userId)
+            .Select(b => new BinderSummaryDto(
+                b.Id, b.Name, b.ColourHex, b.Rows, b.Columns,
+                b.Pages.Count,
+                b.Pages.SelectMany(p => p.Slots).Count(),
+                b.Pages.SelectMany(p => p.Slots).Count(s => s.CardVariantId != null),
+                b.Pages.SelectMany(p => p.Slots).Count(s => s.Owned),
+                b.Pages.SelectMany(p => p.Slots).Count(s => s.CardVariantId != null && !s.Owned),
+                b.CreatedAt,
+                b.LastAccessedAt))
+            .FirstOrDefaultAsync(ct);
+
+        if (binder is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(binder);
+    }
+
     [HttpPatch("{id:guid}")]
     public async Task<ActionResult<BinderSummaryDto>> Update(Guid id, UpdateBinderRequest request, CancellationToken ct)
     {

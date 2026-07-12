@@ -11,6 +11,8 @@ public record SetSummaryDto(
     string? SymbolImageUrl,
     string? LogoImageUrl);
 
+public record VariantSummaryDto(Guid Id, string VariantTypeName);
+
 public record CardSummaryDto(
     string Id,
     string SetId,
@@ -19,7 +21,8 @@ public record CardSummaryDto(
     string? Rarity,
     string Supertype,
     string? ImageSmallUrl,
-    string? ImageLargeUrl);
+    string? ImageLargeUrl,
+    IReadOnlyList<VariantSummaryDto> Variants);
 
 public record CardDetailDto(
     string Id,
