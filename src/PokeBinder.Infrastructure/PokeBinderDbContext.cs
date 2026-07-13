@@ -22,6 +22,8 @@ public class PokeBinderDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CardSubtype> CardSubtypes { get; set; } = null!;
     public DbSet<CardWeaknessType> CardWeaknessTypes { get; set; } = null!;
     public DbSet<CardResistanceType> CardResistanceTypes { get; set; } = null!;
+    public DbSet<SyncRun> SyncRuns { get; set; } = null!;
+    public DbSet<CardEditAudit> CardEditAudits { get; set; } = null!;
 
     public DbSet<Binder> Binders { get; set; } = null!;
     public DbSet<BinderPage> BinderPages { get; set; } = null!;

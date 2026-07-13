@@ -3,6 +3,9 @@ import { AppShell } from './components/AppShell'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { RequireAdmin } from './components/RequireAdmin'
 import { AdminPage } from './pages/AdminPage'
+import { CardsManagementPage } from './pages/admin/CardsManagementPage'
+import { SyncPage } from './pages/admin/SyncPage'
+import { VariantsPage } from './pages/admin/VariantsPage'
 import { BinderDetailPage } from './pages/BinderDetailPage'
 import { BindersPage } from './pages/BindersPage'
 import { CardsPage } from './pages/CardsPage'
@@ -23,7 +26,12 @@ function App() {
           <Route path="/binders/:id" element={<BinderDetailPage />} />
           <Route path="/cards" element={<CardsPage />} />
           <Route element={<RequireAdmin />}>
-            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin" element={<AdminPage />}>
+              <Route index element={<Navigate to="sync" replace />} />
+              <Route path="sync" element={<SyncPage />} />
+              <Route path="cards" element={<CardsManagementPage />} />
+              <Route path="variants" element={<VariantsPage />} />
+            </Route>
           </Route>
         </Route>
       </Route>

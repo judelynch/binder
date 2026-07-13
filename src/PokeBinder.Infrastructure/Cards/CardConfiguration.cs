@@ -22,6 +22,7 @@ public class CardConfiguration : IEntityTypeConfiguration<Card>
         builder.Property(c => c.Artist).HasMaxLength(200);
         builder.Property(c => c.Rarity).HasMaxLength(100);
         builder.Property(c => c.RegulationMark).HasMaxLength(10);
+        builder.Property(c => c.Origin).HasConversion<string>().HasMaxLength(10);
 
         builder.Property(c => c.Subtypes).HasConversion(new JsonValueConverter<IReadOnlyList<string>>()).HasColumnType("nvarchar(max)")
             .Metadata.SetValueComparer(new JsonListValueComparer<string>());

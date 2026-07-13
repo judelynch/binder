@@ -1,0 +1,74 @@
+[
+  {
+    "id": "test2-RC2",
+    "name": "Radiant Two",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Psychic"],
+    "number": "RC2",
+    "rarity": "Rare Holo",
+    "nationalPokedexNumbers": [26],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test2/RC2.png", "large": "https://images.pokemontcg.io/test2/RC2_hires.png" }
+  },
+  {
+    "id": "test2-2a",
+    "name": "Beta (Alt Art)",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Water"],
+    "number": "2a",
+    "rarity": "Rare Secret",
+    "nationalPokedexNumbers": [11],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test2/2a.png", "large": "https://images.pokemontcg.io/test2/2a_hires.png" }
+  },
+  {
+    "id": "test2-1",
+    "name": "Alpha",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Fire"],
+    "number": "1",
+    "rarity": "Common",
+    "nationalPokedexNumbers": [10],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test2/1.png", "large": "https://images.pokemontcg.io/test2/1_hires.png" }
+  },
+  {
+    "id": "test2-RC1",
+    "name": "Radiant One",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Lightning"],
+    "number": "RC1",
+    "rarity": "Rare Holo",
+    "nationalPokedexNumbers": [25],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test2/RC1.png", "large": "https://images.pokemontcg.io/test2/RC1_hires.png" }
+  },
+  {
+    "id": "test2-3",
+    "name": "Gamma",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Grass"],
+    "number": "3",
+    "rarity": "Common",
+    "nationalPokedexNumbers": [12],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test2/3.png", "large": "https://images.pokemontcg.io/test2/3_hires.png" }
+  },
+  {
+    "id": "test2-2",
+    "name": "Beta",
+    "supertype": "Pokémon",
+    "subtypes": ["Basic"],
+    "types": ["Water"],
+    "number": "2",
+    "rarity": "Common",
+    "nationalPokedexNumbers": [11],
+    "legalities": { "unlimited": "Legal" },
+    "images": { "small": "https://images.pokemontcg.io/test2/2.png", "large": "https://images.pokemontcg.io/test2/2_hires.png" }
+  }
+]

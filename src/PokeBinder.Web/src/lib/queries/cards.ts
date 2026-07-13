@@ -37,10 +37,39 @@ export interface PagedResult<T> {
   totalCount: number
 }
 
+export interface CardDetail {
+  id: string
+  setId: string
+  name: string
+  supertype: string
+  subtypes: string[]
+  level: string | null
+  hp: string | null
+  types: string[]
+  evolvesFrom: string | null
+  number: string
+  artist: string | null
+  rarity: string | null
+  flavorText: string | null
+  regulationMark: string | null
+  nationalPokedexNumbers: number[]
+  imageSmallUrl: string | null
+  imageLargeUrl: string | null
+  variantTypeNames: string[]
+}
+
 export function useSets() {
   return useQuery({
     queryKey: ['sets'],
     queryFn: async () => (await api.get<SetSummary[]>('/sets')).data,
+  })
+}
+
+export function useCard(cardId: string | null) {
+  return useQuery({
+    queryKey: ['card-detail', cardId],
+    queryFn: async () => (await api.get<CardDetail>(`/cards/${cardId}`)).data,
+    enabled: cardId !== null,
   })
 }
 

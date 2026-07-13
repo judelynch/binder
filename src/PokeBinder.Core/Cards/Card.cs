@@ -41,6 +41,8 @@ public class Card
     public string? ImageSmallUrl { get; set; }
     public string? ImageLargeUrl { get; set; }
 
+    public DataOrigin Origin { get; set; } = DataOrigin.Synced;
+
     public ICollection<CardPokedexNumber> PokedexNumbers { get; set; } = new List<CardPokedexNumber>();
     public ICollection<CardVariant> Variants { get; set; } = new List<CardVariant>();
     public ICollection<CardType> TypeRows { get; set; } = new List<CardType>();

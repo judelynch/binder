@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PokeBinder.Api.Cards;
 using PokeBinder.Api.Dtos;
 using PokeBinder.Core.Cards;
 using PokeBinder.Infrastructure;
@@ -26,87 +27,7 @@ public class CardsController : ControllerBase
         var page = Math.Max(request.Page, 1);
         var pageSize = Math.Clamp(request.PageSize, 1, 500); // 500 = the select-all-results cap
 
-        var query = _db.Cards.AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(request.Name))
-        {
-            query = query.Where(c => EF.Functions.Like(c.Name, $"%{request.Name}%"));
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Supertype))
-        {
-            query = query.Where(c => c.Supertype == request.Supertype);
-        }
-
-        if (request.Subtypes is { Length: > 0 })
-        {
-            query = query.Where(c => c.SubtypeRows.Any(s => request.Subtypes.Contains(s.Subtype)));
-        }
-
-        if (request.Types is { Length: > 0 })
-        {
-            query = query.Where(c => c.TypeRows.Any(t => request.Types.Contains(t.Type)));
-        }
-
-        if (request.SetIds is { Length: > 0 })
-        {
-            query = query.Where(c => request.SetIds.Contains(c.SetId));
-        }
-
-        if (request.Series is { Length: > 0 })
-        {
-            query = query.Where(c => request.Series.Contains(c.Set!.Series));
-        }
-
-        if (request.Rarities is { Length: > 0 })
-        {
-            query = query.Where(c => c.Rarity != null && request.Rarities.Contains(c.Rarity));
-        }
-
-        if (request.HpMin.HasValue)
-        {
-            query = query.Where(c => c.HpValue != null && c.HpValue >= request.HpMin);
-        }
-
-        if (request.HpMax.HasValue)
-        {
-            query = query.Where(c => c.HpValue != null && c.HpValue <= request.HpMax);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.WeaknessType))
-        {
-            query = query.Where(c => c.WeaknessTypeRows.Any(w => w.Type == request.WeaknessType));
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.ResistanceType))
-        {
-            query = query.Where(c => c.ResistanceTypeRows.Any(r => r.Type == request.ResistanceType));
-        }
-
-        if (request.RetreatCostMin.HasValue)
-        {
-            query = query.Where(c => c.ConvertedRetreatCost != null && c.ConvertedRetreatCost >= request.RetreatCostMin);
-        }
-
-        if (request.RetreatCostMax.HasValue)
-        {
-            query = query.Where(c => c.ConvertedRetreatCost != null && c.ConvertedRetreatCost <= request.RetreatCostMax);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Artist))
-        {
-            query = query.Where(c => c.Artist != null && EF.Functions.Like(c.Artist, $"%{request.Artist}%"));
-        }
-
-        if (request.RegulationMarks is { Length: > 0 })
-        {
-            query = query.Where(c => c.RegulationMark != null && request.RegulationMarks.Contains(c.RegulationMark));
-        }
-
-        if (request.NationalPokedexNumber.HasValue)
-        {
-            query = query.Where(c => c.PokedexNumbers.Any(p => p.Number == request.NationalPokedexNumber));
-        }
+        var query = _db.Cards.AsQueryable().ApplyFilters(request);
 
         query = request.Sort switch
         {

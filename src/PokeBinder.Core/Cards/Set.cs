@@ -14,5 +14,7 @@ public class Set
     public string? LogoImageUrl { get; set; }
     public IReadOnlyDictionary<string, string> Legalities { get; set; } = new Dictionary<string, string>();
 
+    public DataOrigin Origin { get; set; } = DataOrigin.Synced;
+
     public ICollection<Card> Cards { get; set; } = new List<Card>();
 }

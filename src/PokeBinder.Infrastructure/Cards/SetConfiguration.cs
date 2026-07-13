@@ -13,6 +13,7 @@ public class SetConfiguration : IEntityTypeConfiguration<Set>
         builder.Property(s => s.Name).HasMaxLength(200).IsRequired();
         builder.Property(s => s.Series).HasMaxLength(200);
         builder.Property(s => s.PtcgoCode).HasMaxLength(20);
+        builder.Property(s => s.Origin).HasConversion<string>().HasMaxLength(10);
 
         builder.Property(s => s.Legalities)
             .HasConversion(new JsonValueConverter<IReadOnlyDictionary<string, string>>())
