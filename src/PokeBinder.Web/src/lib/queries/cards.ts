@@ -11,11 +11,22 @@ export interface SetSummary {
   ptcgoCode: string | null
   symbolImageUrl: string | null
   logoImageUrl: string | null
+  cardCount: number
+  ownedCount: number
 }
 
 export interface VariantSummary {
   id: string
   variantTypeName: string
+}
+
+/** VariantSummary plus the current user's ownership of this specific variant. */
+export interface OwnedVariantSummary {
+  id: string
+  variantTypeName: string
+  owned: boolean
+  quantity: number
+  condition: string | null
 }
 
 export interface CardSummary {
@@ -27,7 +38,7 @@ export interface CardSummary {
   supertype: string
   imageSmallUrl: string | null
   imageLargeUrl: string | null
-  variants: VariantSummary[]
+  variants: OwnedVariantSummary[]
 }
 
 export interface PagedResult<T> {
@@ -35,6 +46,25 @@ export interface PagedResult<T> {
   page: number
   pageSize: number
   totalCount: number
+}
+
+export interface Ability {
+  name: string
+  text: string
+  type: string
+}
+
+export interface Attack {
+  name: string
+  cost: string[]
+  convertedEnergyCost: number
+  damage: string | null
+  text: string
+}
+
+export interface TypeEffect {
+  type: string
+  value: string
 }
 
 export interface CardDetail {
@@ -47,6 +77,12 @@ export interface CardDetail {
   hp: string | null
   types: string[]
   evolvesFrom: string | null
+  abilities: Ability[]
+  attacks: Attack[]
+  weaknesses: TypeEffect[]
+  resistances: TypeEffect[]
+  retreatCost: string[]
+  convertedRetreatCost: number | null
   number: string
   artist: string | null
   rarity: string | null
@@ -55,13 +91,21 @@ export interface CardDetail {
   nationalPokedexNumbers: number[]
   imageSmallUrl: string | null
   imageLargeUrl: string | null
-  variantTypeNames: string[]
+  variants: OwnedVariantSummary[]
 }
 
 export function useSets() {
   return useQuery({
     queryKey: ['sets'],
     queryFn: async () => (await api.get<SetSummary[]>('/sets')).data,
+  })
+}
+
+/** Every user (not just admins) can call this — it's how the search filter panel populates the variant filter. */
+export function useVariantTypeNames() {
+  return useQuery({
+    queryKey: ['variant-type-names'],
+    queryFn: async () => (await api.get<string[]>('/cards/variant-types')).data,
   })
 }
 
