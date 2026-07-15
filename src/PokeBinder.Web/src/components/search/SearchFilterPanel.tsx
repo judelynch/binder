@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ENERGY_TYPES, RARITIES, REGULATION_MARKS, SORT_OPTIONS, SUBTYPES, SUPERTYPES } from '../../lib/card-options'
-import { useSets } from '../../lib/queries/cards'
+import { DEFAULT_SORT_DESCENDING, ENERGY_TYPES, RARITIES, REGULATION_MARKS, SORT_OPTIONS, SUBTYPES, SUPERTYPES } from '../../lib/card-options'
+import { useSets, useVariantTypeNames } from '../../lib/queries/cards'
 import type { CardSearchFilters } from '../../lib/search-types'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import { ActiveFilterChips } from './ActiveFilterChips'
-import { CheckboxList } from './CheckboxList'
+import { CheckboxChips } from './CheckboxChips'
 import { FilterGroup } from './FilterGroup'
 import { RadioChips } from './RadioChips'
 import { RangeInput } from './RangeInput'
@@ -19,6 +19,7 @@ export function SearchFilterPanel({
   resultCount: number | null
 }) {
   const { data: sets } = useSets()
+  const { data: variantTypeNames } = useVariantTypeNames()
   const seriesOptions = Array.from(new Set(sets?.map((s) => s.series) ?? [])).sort()
   const setOptions = (sets ?? []).map((s) => ({ id: s.id, name: s.name }));
 
@@ -47,18 +48,32 @@ export function SearchFilterPanel({
           <span className="text-xs text-ink-soft">
             {resultCount === null ? 'Searching…' : `${resultCount.toLocaleString()} results`}
           </span>
-          <select
-            aria-label="Sort by"
-            value={filters.sort}
-            onChange={(e) => onChange({ ...filters, sort: e.target.value as CardSearchFilters['sort'] })}
-            className="rounded-lg border border-border bg-canvas px-2 py-1 text-xs text-ink"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1">
+            <select
+              aria-label="Sort by"
+              value={filters.sort}
+              onChange={(e) => {
+                const sort = e.target.value as CardSearchFilters['sort']
+                onChange({ ...filters, sort, sortDescending: DEFAULT_SORT_DESCENDING[sort] })
+              }}
+              className="rounded-lg border border-border bg-canvas px-2 py-1 text-xs text-ink"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onChange({ ...filters, sortDescending: !filters.sortDescending })}
+              aria-label={filters.sortDescending ? 'Sort descending — click for ascending' : 'Sort ascending — click for descending'}
+              title={filters.sortDescending ? 'Descending' : 'Ascending'}
+              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg border border-border text-xs text-ink-soft hover:text-ink"
+            >
+              {filters.sortDescending ? '↓' : '↑'}
+            </button>
+          </div>
         </div>
         <div className="mt-2.5">
           <ActiveFilterChips filters={filters} onChange={onChange} />
@@ -71,15 +86,15 @@ export function SearchFilterPanel({
         </FilterGroup>
 
         <FilterGroup title="Card type">
-          <CheckboxList options={SUBTYPES} selected={filters.subtypes} onChange={(v) => onChange({ ...filters, subtypes: v })} />
+          <CheckboxChips options={SUBTYPES} selected={filters.subtypes} onChange={(v) => onChange({ ...filters, subtypes: v })} />
         </FilterGroup>
 
         <FilterGroup title="Energy type">
-          <CheckboxList options={ENERGY_TYPES} selected={filters.types} onChange={(v) => onChange({ ...filters, types: v })} />
+          <CheckboxChips options={ENERGY_TYPES} selected={filters.types} onChange={(v) => onChange({ ...filters, types: v })} />
         </FilterGroup>
 
         <FilterGroup title="Set">
-          <CheckboxList
+          <CheckboxChips
             options={setOptions.map((s) => s.name)}
             selected={setOptions.filter((s) => filters.setIds.includes(s.id)).map((s) => s.name)}
             onChange={(names) =>
@@ -89,11 +104,11 @@ export function SearchFilterPanel({
         </FilterGroup>
 
         <FilterGroup title="Series">
-          <CheckboxList options={seriesOptions} selected={filters.series} onChange={(v) => onChange({ ...filters, series: v })} />
+          <CheckboxChips options={seriesOptions} selected={filters.series} onChange={(v) => onChange({ ...filters, series: v })} />
         </FilterGroup>
 
         <FilterGroup title="Rarity">
-          <CheckboxList options={RARITIES} selected={filters.rarities} onChange={(v) => onChange({ ...filters, rarities: v })} />
+          <CheckboxChips options={RARITIES} selected={filters.rarities} onChange={(v) => onChange({ ...filters, rarities: v })} />
         </FilterGroup>
 
         <FilterGroup title="HP">
@@ -127,10 +142,18 @@ export function SearchFilterPanel({
         </FilterGroup>
 
         <FilterGroup title="Regulation mark">
-          <CheckboxList
+          <CheckboxChips
             options={REGULATION_MARKS}
             selected={filters.regulationMarks}
             onChange={(v) => onChange({ ...filters, regulationMarks: v })}
+          />
+        </FilterGroup>
+
+        <FilterGroup title="Variant">
+          <CheckboxChips
+            options={variantTypeNames ?? []}
+            selected={filters.variantTypes}
+            onChange={(v) => onChange({ ...filters, variantTypes: v })}
           />
         </FilterGroup>
 

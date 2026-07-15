@@ -1,15 +1,22 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RecentBinderTile } from '../components/RecentBinderTile'
+import { SetTile } from '../components/sets/SetTile'
 import { StatCard } from '../components/StatCard'
 import { StatCardSkeleton } from '../components/Skeleton'
 import { EmptyState } from '../components/EmptyState'
 import { useAuth } from '../lib/auth-context'
 import { useDashboard } from '../lib/queries/binders'
+import { useSets } from '../lib/queries/cards'
+import { topInProgressSets } from '../lib/filterSets'
 
 export function HomePage() {
   const { user } = useAuth()
   const { data, isPending, isError } = useDashboard()
+  const { data: sets, isPending: setsPending } = useSets()
   const navigate = useNavigate()
+
+  const inProgressSets = useMemo(() => topInProgressSets(sets ?? [], 5), [sets])
 
   // The API reports cardsOwned/cardsMissing as account-wide totals but doesn't
   // return a single "overall completeness" figure, so it's derived here the
@@ -67,6 +74,32 @@ export function HomePage() {
           <div className="flex gap-3 overflow-x-auto pb-2">
             {data.recentBinders.map((binder) => (
               <RecentBinderTile key={binder.id} binder={binder} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-8 flex items-baseline justify-between">
+        <h2 className="font-display text-base font-semibold text-ink">Sets in progress</h2>
+        <button onClick={() => navigate('/sets')} className="text-xs font-semibold text-accent">
+          View all sets →
+        </button>
+      </div>
+
+      <div className="mt-3">
+        {setsPending ? null : inProgressSets.length === 0 ? (
+          <EmptyState
+            title="No sets in progress"
+            message="Mark a few cards owned from any set to start tracking its completion here."
+            actionLabel="Browse sets"
+            onAction={() => navigate('/sets')}
+          />
+        ) : (
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {inProgressSets.map((set) => (
+              <div key={set.id} className="w-56 shrink-0">
+                <SetTile set={set} />
+              </div>
             ))}
           </div>
         )}

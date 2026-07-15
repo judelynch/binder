@@ -34,22 +34,24 @@
 
 /*
  * "Case Display" — the app's one and only theme (deliberately single-theme,
- * see Phase 3 design grill): a deep forest-black display case with brass
- * foil accents. No light mode / prefers-color-scheme handling by design.
+ * see Phase 3 design grill): a charcoal display case (shades of #2B2D2F)
+ * with brass foil accents. No light mode / prefers-color-scheme handling
+ * by design. Was originally a forest-green ground; moved to neutral
+ * charcoal per direct design feedback ("the green isn't doing it").
  */
 @theme {
   --font-display: "Fraunces", ui-serif, Georgia, serif;
   --font-body: "Work Sans", system-ui, sans-serif;
 
-  --color-canvas: #141f1a;
-  --color-surface: #1d2b24;
-  --color-surface-2: #24352c;
-  --color-ink: #efe8d6;
-  --color-ink-soft: #a8b3a8;
-  --color-ink-faint: #6f7c73;
+  --color-canvas: #1b1c1e;
+  --color-surface: #2b2d2f;
+  --color-surface-2: #36383b;
+  --color-ink: #ece9e2;
+  --color-ink-soft: #a3a5a8;
+  --color-ink-faint: #6d6f72;
   --color-accent: #d9a441;
-  --color-accent-ink: #14201a;
-  --color-border: #33443a;
+  --color-accent-ink: #1f1809;
+  --color-border: #414346;
   --color-good: #7fae7a;
   --color-bad: #d9765f;
 }
