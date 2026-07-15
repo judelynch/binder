@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using PokeBinder.Core.Binders;
 using PokeBinder.Core.Cards;
+using PokeBinder.Core.Collection;
 using PokeBinder.Core.Identity;
 
 namespace PokeBinder.Infrastructure;
@@ -29,6 +30,8 @@ public class PokeBinderDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BinderPage> BinderPages { get; set; } = null!;
     public DbSet<BinderSlot> BinderSlots { get; set; } = null!;
     public DbSet<OverlayTag> OverlayTags { get; set; } = null!;
+
+    public DbSet<CardOwnership> CardOwnerships { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

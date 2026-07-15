@@ -21,6 +21,11 @@ public class CardsController : ControllerBase
         _db = db;
     }
 
+    /// <summary>Every user (not just admins) needs this to populate the variant filter in search.</summary>
+    [HttpGet("variant-types")]
+    public async Task<ActionResult<IReadOnlyList<string>>> GetVariantTypeNames(CancellationToken ct) =>
+        Ok(await _db.VariantTypes.OrderBy(v => v.Name).Select(v => v.Name).ToListAsync(ct));
+
     [HttpGet("search")]
     public async Task<ActionResult<PagedResult<CardSearchResultDto>>> Search([FromQuery] CardSearchRequest request, CancellationToken ct)
     {
@@ -31,14 +36,22 @@ public class CardsController : ControllerBase
 
         query = request.Sort switch
         {
-            "name" => query.OrderBy(c => c.Name).ThenBy(c => c.Id),
-            "releaseDate" => query
-                .OrderByDescending(c => c.Set!.ReleaseDate)
-                .ThenBy(c => c.NumberSortGroup).ThenBy(c => c.NumberSortPrefix).ThenBy(c => c.NumberSortValue).ThenBy(c => c.NumberSortSuffix),
-            "rarity" => query.OrderByDescending(RarityRankExpression).ThenBy(c => c.Name),
-            _ => query
-                .OrderByDescending(c => c.Set!.ReleaseDate)
-                .ThenBy(c => c.NumberSortGroup).ThenBy(c => c.NumberSortPrefix).ThenBy(c => c.NumberSortValue).ThenBy(c => c.NumberSortSuffix),
+            "name" => (request.SortDescending ?? false)
+                ? query.OrderByDescending(c => c.Name).ThenBy(c => c.Id)
+                : query.OrderBy(c => c.Name).ThenBy(c => c.Id),
+            "releaseDate" => (request.SortDescending ?? true)
+                ? query.OrderByDescending(c => c.Set!.ReleaseDate)
+                    .ThenBy(c => c.NumberSortGroup).ThenBy(c => c.NumberSortPrefix).ThenBy(c => c.NumberSortValue).ThenBy(c => c.NumberSortSuffix)
+                : query.OrderBy(c => c.Set!.ReleaseDate)
+                    .ThenBy(c => c.NumberSortGroup).ThenBy(c => c.NumberSortPrefix).ThenBy(c => c.NumberSortValue).ThenBy(c => c.NumberSortSuffix),
+            "rarity" => (request.SortDescending ?? true)
+                ? query.OrderByDescending(RarityRankExpression).ThenBy(c => c.Name)
+                : query.OrderBy(RarityRankExpression).ThenBy(c => c.Name),
+            _ => (request.SortDescending ?? true)
+                ? query.OrderByDescending(c => c.Set!.ReleaseDate)
+                    .ThenBy(c => c.NumberSortGroup).ThenBy(c => c.NumberSortPrefix).ThenBy(c => c.NumberSortValue).ThenBy(c => c.NumberSortSuffix)
+                : query.OrderBy(c => c.Set!.ReleaseDate)
+                    .ThenBy(c => c.NumberSortGroup).ThenBy(c => c.NumberSortPrefix).ThenBy(c => c.NumberSortValue).ThenBy(c => c.NumberSortSuffix),
         };
 
         var totalCount = await query.CountAsync(ct);
@@ -48,7 +61,9 @@ public class CardsController : ControllerBase
             .Take(pageSize)
             .Select(c => new CardSearchResultDto(
                 c.Id, c.SetId, c.Set!.Name, c.Name, c.Number, c.Rarity, c.Supertype, c.ImageSmallUrl, c.ImageLargeUrl,
-                c.Variants.Select(v => new VariantSummaryDto(v.Id, v.VariantType!.Name)).ToList()))
+                c.Variants
+                    .OrderBy(v => v.VariantType!.Name != "Normal").ThenBy(v => v.VariantType!.Name)
+                    .Select(v => new VariantSummaryDto(v.Id, v.VariantType!.Name)).ToList()))
             .ToListAsync(ct);
 
         return Ok(new PagedResult<CardSearchResultDto>(items, page, pageSize, totalCount));
@@ -114,13 +129,32 @@ public class CardsController : ControllerBase
             return NotFound();
         }
 
+        var userId = this.GetUserId();
+        var variantIds = card.Variants.Select(v => v.Id).ToList();
+        var ownershipByVariant = await _db.CardOwnerships
+            .Where(o => o.UserId == userId && variantIds.Contains(o.CardVariantId))
+            .ToDictionaryAsync(o => o.CardVariantId, ct);
+
+        var variants = card.Variants
+            .OrderBy(v => v.VariantType!.Name != "Normal").ThenBy(v => v.VariantType!.Name)
+            .Select(v =>
+            {
+                ownershipByVariant.TryGetValue(v.Id, out var ownership);
+                return new OwnedVariantSummaryDto(
+                    v.Id, v.VariantType!.Name, ownership is not null, ownership?.Quantity ?? 0, ownership?.Condition?.ToString());
+            })
+            .ToList();
+
         var dto = new CardDetailDto(
             card.Id, card.SetId, card.Name, card.Supertype, card.Subtypes, card.Level, card.Hp,
-            card.Types, card.EvolvesFrom, card.Number, card.Artist, card.Rarity, card.FlavorText,
+            card.Types, card.EvolvesFrom,
+            card.Abilities, card.Attacks, card.Weaknesses, card.Resistances,
+            card.RetreatCost, card.ConvertedRetreatCost,
+            card.Number, card.Artist, card.Rarity, card.FlavorText,
             card.RegulationMark,
             card.PokedexNumbers.Select(p => p.Number).OrderBy(n => n).ToList(),
             card.ImageSmallUrl, card.ImageLargeUrl,
-            card.Variants.Select(v => v.VariantType!.Name).OrderBy(n => n).ToList());
+            variants);
 
         return Ok(dto);
     }

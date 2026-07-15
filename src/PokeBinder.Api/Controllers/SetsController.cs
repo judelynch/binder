@@ -21,11 +21,24 @@ public class SetsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SetSummaryDto>>> GetSets(CancellationToken ct)
     {
+        var userId = this.GetUserId();
+
+        // A card counts toward OwnedCount once every "required" variant of it is owned - required
+        // meaning every variant except ones whose type name contains "Stamp" (e.g. "Promo Stamp"),
+        // which are deliberately excluded from set-completion. ToUpper().Contains(...) neutralizes
+        // case on both sides before comparing, so this doesn't depend on the database's collation
+        // being case-insensitive - relying on that implicitly would be a silent, easy-to-miss bug.
+        // A card whose only variant is a Stamp variant has zero required variants, so it counts as
+        // owned vacuously (no unmet requirement) - intentional, not an edge case to "fix".
         var sets = await _db.Sets
             .OrderByDescending(s => s.ReleaseDate)
             .Select(s => new SetSummaryDto(
                 s.Id, s.Name, s.Series, s.PrintedTotal, s.Total, s.ReleaseDate,
-                s.PtcgoCode, s.SymbolImageUrl, s.LogoImageUrl))
+                s.PtcgoCode, s.SymbolImageUrl, s.LogoImageUrl,
+                s.Cards.Count(),
+                s.Cards.Count(c => !c.Variants.Any(v =>
+                    !v.VariantType!.Name.ToUpper().Contains("STAMP") &&
+                    !_db.CardOwnerships.Any(o => o.CardVariantId == v.Id && o.UserId == userId && o.Quantity >= 1)))))
             .ToListAsync(ct);
 
         return Ok(sets);
@@ -59,14 +72,47 @@ public class SetsController : ControllerBase
             .ThenBy(c => c.Number);
 
         var totalCount = await query.CountAsync(ct);
+        var userId = this.GetUserId();
 
-        var items = await query
+        var cards = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(c => new
+            {
+                c.Id,
+                c.SetId,
+                c.Name,
+                c.Number,
+                c.Rarity,
+                c.Supertype,
+                c.ImageSmallUrl,
+                c.ImageLargeUrl,
+                Variants = c.Variants
+                    .OrderBy(v => v.VariantType!.Name != "Normal").ThenBy(v => v.VariantType!.Name)
+                    .Select(v => new { v.Id, VariantTypeName = v.VariantType!.Name })
+                    .ToList(),
+            })
+            .ToListAsync(ct);
+
+        // A second round trip for ownership (rather than a correlated subquery per variant, per field)
+        // avoids both a nullable-enum-in-subquery EF translation risk and, more importantly, a real
+        // bug: Nullable<T>.ToString() returns "" (not null) when the nullable has no value, which
+        // would have silently turned "unowned" into Condition = "" instead of null.
+        var variantIds = cards.SelectMany(c => c.Variants.Select(v => v.Id)).ToList();
+        var ownershipByVariant = await _db.CardOwnerships
+            .Where(o => o.UserId == userId && variantIds.Contains(o.CardVariantId))
+            .ToDictionaryAsync(o => o.CardVariantId, ct);
+
+        var items = cards
             .Select(c => new CardSummaryDto(
                 c.Id, c.SetId, c.Name, c.Number, c.Rarity, c.Supertype, c.ImageSmallUrl, c.ImageLargeUrl,
-                c.Variants.Select(v => new VariantSummaryDto(v.Id, v.VariantType!.Name)).ToList()))
-            .ToListAsync(ct);
+                c.Variants.Select(v =>
+                {
+                    ownershipByVariant.TryGetValue(v.Id, out var ownership);
+                    return new OwnedVariantSummaryDto(
+                        v.Id, v.VariantTypeName, ownership is not null, ownership?.Quantity ?? 0, ownership?.Condition?.ToString());
+                }).ToList()))
+            .ToList();
 
         return Ok(new PagedResult<CardSummaryDto>(items, page, pageSize, totalCount));
     }

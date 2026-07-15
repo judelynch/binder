@@ -181,13 +181,19 @@ public class AdminController : ControllerBase
         });
         await _db.SaveChangesAsync(ct);
 
+        // Admin editing context - there's no single relevant "current user's collection" here, so
+        // every variant is reported unowned/quantity 0 rather than joining CardOwnership at all.
         var dto = new CardDetailDto(
             card.Id, card.SetId, card.Name, card.Supertype, card.Subtypes, card.Level, card.Hp,
-            card.Types, card.EvolvesFrom, card.Number, card.Artist, card.Rarity, card.FlavorText,
+            card.Types, card.EvolvesFrom,
+            card.Abilities, card.Attacks, card.Weaknesses, card.Resistances,
+            card.RetreatCost, card.ConvertedRetreatCost,
+            card.Number, card.Artist, card.Rarity, card.FlavorText,
             card.RegulationMark,
             card.PokedexNumbers.Select(p => p.Number).OrderBy(n => n).ToList(),
             card.ImageSmallUrl, card.ImageLargeUrl,
-            card.Variants.Select(v => v.VariantType!.Name).OrderBy(n => n).ToList());
+            card.Variants.OrderBy(v => v.VariantType!.Name != "Normal").ThenBy(v => v.VariantType!.Name)
+                .Select(v => new OwnedVariantSummaryDto(v.Id, v.VariantType!.Name, false, 0, null)).ToList());
         return Ok(dto);
     }
 
@@ -233,7 +239,9 @@ public class AdminController : ControllerBase
         _db.Sets.Add(set);
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new SetSummaryDto(set.Id, set.Name, set.Series, set.PrintedTotal, set.Total, set.ReleaseDate, set.PtcgoCode, set.SymbolImageUrl, set.LogoImageUrl));
+        return Ok(new SetSummaryDto(
+            set.Id, set.Name, set.Series, set.PrintedTotal, set.Total, set.ReleaseDate,
+            set.PtcgoCode, set.SymbolImageUrl, set.LogoImageUrl, CardCount: 0, OwnedCount: 0));
     }
 
     [HttpPost("sets/{setId}/cards")]
@@ -293,14 +301,15 @@ public class AdminController : ControllerBase
         }
 
         var normalVariantTypeId = await _db.VariantTypes.Where(v => v.Name == "Normal").Select(v => v.Id).SingleAsync(ct);
-        _db.CardVariants.Add(new CardVariant { Id = Guid.NewGuid(), CardId = card.Id, VariantTypeId = normalVariantTypeId });
+        var normalVariant = new CardVariant { Id = Guid.NewGuid(), CardId = card.Id, VariantTypeId = normalVariantTypeId };
+        _db.CardVariants.Add(normalVariant);
 
         await _db.SaveChangesAsync(ct);
 
         return Ok(new CardSummaryDto(
             card.Id, card.SetId, card.Name, card.Number, card.Rarity, card.Supertype,
             card.ImageSmallUrl, card.ImageLargeUrl,
-            new List<VariantSummaryDto> { new(Guid.Empty, "Normal") }));
+            new List<OwnedVariantSummaryDto> { new(normalVariant.Id, "Normal", false, 0, null) }));
     }
 
     // ---- Variant management ----

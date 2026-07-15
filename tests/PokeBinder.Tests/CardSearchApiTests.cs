@@ -120,6 +120,47 @@ public class CardSearchApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sort_NameDescending_ReversesOrder()
+    {
+        var result = await SearchAsync("sort=name&sortDescending=true&pageSize=10");
+        var names = result.Items.Select(i => i.Name).ToList();
+        Assert.Equal(names.OrderByDescending(n => n, StringComparer.Ordinal), names);
+    }
+
+    [Fact]
+    public async Task Sort_RarityAscending_PutsCommonsFirst()
+    {
+        // Default rarity sort is rarest-first; explicit ascending should flip to commons-first.
+        var result = await SearchAsync("sort=rarity&sortDescending=false&pageSize=10");
+        Assert.Equal("Common", result.Items[0].Rarity);
+    }
+
+    [Fact]
+    public async Task VariantType_FiltersToCardsWithThatVariant()
+    {
+        // Only Charizard (search-2) also comes in Reverse Holo per SearchCardFixture.
+        var result = await SearchAsync("variantTypes=Reverse+Holo");
+        Assert.Single(result.Items);
+        Assert.Equal("search-2", result.Items[0].Id);
+    }
+
+    [Fact]
+    public async Task VariantType_Normal_MatchesEveryCard()
+    {
+        var result = await SearchAsync("variantTypes=Normal");
+        Assert.Equal(5, result.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetVariantTypeNames_ReturnsAllSeededNames()
+    {
+        var response = await _client.GetAsync("/api/cards/variant-types");
+        response.EnsureSuccessStatusCode();
+        var names = await response.Content.ReadFromJsonAsync<List<string>>();
+        Assert.Equal(new[] { "Normal", "Reverse Holo" }, names);
+    }
+
+    [Fact]
     public async Task Pagination_ReturnsCorrectSlice()
     {
         var page1 = await SearchAsync("sort=name&page=1&pageSize=2");
@@ -135,7 +176,38 @@ public class CardSearchApiTests : IAsyncLifetime
     {
         var result = await SearchAsync("name=char");
         Assert.NotEmpty(result.Items[0].Variants);
-        Assert.Equal("Normal", result.Items[0].Variants[0].VariantTypeName);
+        Assert.Contains(result.Items[0].Variants, v => v.VariantTypeName == "Normal");
+    }
+
+    [Fact]
+    public async Task GetCard_ReturnsFullStats()
+    {
+        var response = await _client.GetAsync("/api/cards/search-2");
+        response.EnsureSuccessStatusCode();
+        var card = await response.Content.ReadFromJsonAsync<CardDetailDto>();
+
+        Assert.NotNull(card);
+        Assert.Equal("Charizard", card!.Name);
+        Assert.Single(card.Abilities);
+        Assert.Equal("Energy Burn", card.Abilities[0].Name);
+        Assert.Single(card.Attacks);
+        Assert.Equal("Fire Spin", card.Attacks[0].Name);
+        Assert.Single(card.Weaknesses);
+        Assert.Equal("Water", card.Weaknesses[0].Type);
+        Assert.Empty(card.Resistances);
+        Assert.Equal(new[] { "Colorless", "Colorless", "Colorless" }, card.RetreatCost);
+        Assert.Equal(3, card.ConvertedRetreatCost);
+    }
+
+    [Fact]
+    public async Task Results_OrderVariantsWithNormalFirst()
+    {
+        // Charizard (search-2) has both a Normal and a Reverse Holo variant. Without an explicit sort,
+        // SQL Server gives no ordering guarantee at all (insertion order is not preserved) — this
+        // must hold on the strength of the query's own ORDER BY, not incidentally.
+        var result = await SearchAsync("name=char");
+        var variantNames = result.Items[0].Variants.Select(v => v.VariantTypeName).ToList();
+        Assert.Equal("Normal", variantNames[0]);
     }
 
     private record TokenOnly(string Token);

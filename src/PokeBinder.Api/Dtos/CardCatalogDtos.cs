@@ -1,3 +1,5 @@
+using PokeBinder.Core.Cards;
+
 namespace PokeBinder.Api.Dtos;
 
 public record SetSummaryDto(
@@ -9,9 +11,14 @@ public record SetSummaryDto(
     DateOnly ReleaseDate,
     string? PtcgoCode,
     string? SymbolImageUrl,
-    string? LogoImageUrl);
+    string? LogoImageUrl,
+    int CardCount,
+    int OwnedCount);
 
 public record VariantSummaryDto(Guid Id, string VariantTypeName);
+
+/// <summary>Like VariantSummaryDto, plus the current user's ownership of this specific variant.</summary>
+public record OwnedVariantSummaryDto(Guid Id, string VariantTypeName, bool Owned, int Quantity, string? Condition);
 
 public record CardSummaryDto(
     string Id,
@@ -22,7 +29,7 @@ public record CardSummaryDto(
     string Supertype,
     string? ImageSmallUrl,
     string? ImageLargeUrl,
-    IReadOnlyList<VariantSummaryDto> Variants);
+    IReadOnlyList<OwnedVariantSummaryDto> Variants);
 
 public record CardDetailDto(
     string Id,
@@ -34,6 +41,12 @@ public record CardDetailDto(
     string? Hp,
     IReadOnlyList<string> Types,
     string? EvolvesFrom,
+    IReadOnlyList<Ability> Abilities,
+    IReadOnlyList<Attack> Attacks,
+    IReadOnlyList<TypeEffect> Weaknesses,
+    IReadOnlyList<TypeEffect> Resistances,
+    IReadOnlyList<string> RetreatCost,
+    int? ConvertedRetreatCost,
     string Number,
     string? Artist,
     string? Rarity,
@@ -42,7 +55,7 @@ public record CardDetailDto(
     IReadOnlyList<int> NationalPokedexNumbers,
     string? ImageSmallUrl,
     string? ImageLargeUrl,
-    IReadOnlyList<string> VariantTypeNames);
+    IReadOnlyList<OwnedVariantSummaryDto> Variants);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
 

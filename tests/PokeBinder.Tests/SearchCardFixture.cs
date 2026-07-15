@@ -21,13 +21,17 @@ public static class SearchCardFixture
         db.Sets.Add(set);
 
         var normalVariantType = new VariantType { Id = Guid.NewGuid(), Name = "Normal" };
-        db.VariantTypes.Add(normalVariantType);
+        var reverseHoloVariantType = new VariantType { Id = Guid.NewGuid(), Name = "Reverse Holo" };
+        db.VariantTypes.AddRange(normalVariantType, reverseHoloVariantType);
 
         AddCard(db, set.Id, normalVariantType.Id, "search-1", "Pikachu", "Pokémon", "Basic",
             types: new[] { "Lightning" }, hp: 60, rarity: "Common", weaknessType: "Fighting", resistanceType: null, retreatCost: 1, artist: "Mitsuhiro Arita");
 
         AddCard(db, set.Id, normalVariantType.Id, "search-2", "Charizard", "Pokémon", "Stage 2",
-            types: new[] { "Fire" }, hp: 180, rarity: "Rare Holo", weaknessType: "Water", resistanceType: null, retreatCost: 3, artist: "Mitsuhiro Arita");
+            types: new[] { "Fire" }, hp: 180, rarity: "Rare Holo", weaknessType: "Water", resistanceType: null, retreatCost: 3, artist: "Mitsuhiro Arita",
+            abilities: new[] { new Ability("Energy Burn", "All Fire-type attacks do 20 more damage.", "Poké-Power") },
+            attacks: new[] { new Attack("Fire Spin", new[] { "Fire", "Fire", "Fire", "Fire" }, 4, "100", "Discard 2 Energy from this Pokémon.") },
+            retreatCostList: new[] { "Colorless", "Colorless", "Colorless" });
 
         AddCard(db, set.Id, normalVariantType.Id, "search-3", "Blastoise", "Pokémon", "Stage 2",
             types: new[] { "Water" }, hp: 180, rarity: "Rare Holo", weaknessType: "Lightning", resistanceType: null, retreatCost: 3, artist: "Ken Sugimori");
@@ -38,12 +42,16 @@ public static class SearchCardFixture
         AddCard(db, set.Id, normalVariantType.Id, "search-5", "Fire Energy", "Energy", "Basic",
             types: Array.Empty<string>(), hp: null, rarity: "Common", weaknessType: null, resistanceType: null, retreatCost: null, artist: null);
 
+        // Only Charizard also comes in Reverse Holo, so filtering by variant type can be tested meaningfully.
+        db.CardVariants.Add(new CardVariant { Id = Guid.NewGuid(), CardId = "search-2", VariantTypeId = reverseHoloVariantType.Id });
+
         await db.SaveChangesAsync();
     }
 
     private static void AddCard(
         PokeBinderDbContext db, string setId, Guid normalVariantTypeId, string id, string name, string supertype, string subtype,
-        string[] types, int? hp, string rarity, string? weaknessType, string? resistanceType, int? retreatCost, string? artist)
+        string[] types, int? hp, string rarity, string? weaknessType, string? resistanceType, int? retreatCost, string? artist,
+        IReadOnlyList<Ability>? abilities = null, IReadOnlyList<Attack>? attacks = null, IReadOnlyList<string>? retreatCostList = null)
     {
         var card = new Card
         {
@@ -57,6 +65,9 @@ public static class SearchCardFixture
             HpValue = hp,
             Rarity = rarity,
             ConvertedRetreatCost = retreatCost,
+            RetreatCost = retreatCostList ?? Array.Empty<string>(),
+            Abilities = abilities ?? Array.Empty<Ability>(),
+            Attacks = attacks ?? Array.Empty<Attack>(),
             Artist = artist,
             Number = id,
             Weaknesses = weaknessType is null ? Array.Empty<TypeEffect>() : new[] { new TypeEffect(weaknessType, "×2") },
