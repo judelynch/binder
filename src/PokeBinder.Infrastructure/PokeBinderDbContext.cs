@@ -4,6 +4,7 @@ using PokeBinder.Core.Binders;
 using PokeBinder.Core.Cards;
 using PokeBinder.Core.Collection;
 using PokeBinder.Core.Identity;
+using PokeBinder.Core.Pricing;
 
 namespace PokeBinder.Infrastructure;
 
@@ -32,6 +33,13 @@ public class PokeBinderDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<OverlayTag> OverlayTags { get; set; } = null!;
 
     public DbSet<CardOwnership> CardOwnerships { get; set; } = null!;
+
+    public DbSet<RawListing> RawListings { get; set; } = null!;
+    public DbSet<ListingClassification> ListingClassifications { get; set; } = null!;
+    public DbSet<ClassificationFeedback> ClassificationFeedbacks { get; set; } = null!;
+    public DbSet<PricePoint> PricePoints { get; set; } = null!;
+    public DbSet<CardVariantScrapeState> CardVariantScrapeStates { get; set; } = null!;
+    public DbSet<ScrapeRun> ScrapeRuns { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -4,6 +4,8 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { RequireAdmin } from './components/RequireAdmin'
 import { AdminPage } from './pages/AdminPage'
 import { CardsManagementPage } from './pages/admin/CardsManagementPage'
+import { PricingQueuePage } from './pages/admin/PricingQueuePage'
+import { PricingRunsPage } from './pages/admin/PricingRunsPage'
 import { SyncPage } from './pages/admin/SyncPage'
 import { VariantsPage } from './pages/admin/VariantsPage'
 import { BinderDetailPage } from './pages/BinderDetailPage'
@@ -39,6 +41,8 @@ function App() {
               <Route path="sync" element={<SyncPage />} />
               <Route path="cards" element={<CardsManagementPage />} />
               <Route path="variants" element={<VariantsPage />} />
+              <Route path="pricing/queue" element={<PricingQueuePage />} />
+              <Route path="pricing/runs" element={<PricingRunsPage />} />
             </Route>
           </Route>
         </Route>

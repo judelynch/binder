@@ -19,6 +19,12 @@ export function AdminPage() {
         <NavLink to="/admin/variants" className={tabClasses}>
           Variants
         </NavLink>
+        <NavLink to="/admin/pricing/queue" className={tabClasses}>
+          Pricing queue
+        </NavLink>
+        <NavLink to="/admin/pricing/runs" className={tabClasses}>
+          Pricing runs
+        </NavLink>
       </nav>
       <div className="mt-5">
         <Outlet />

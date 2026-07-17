@@ -1,13 +1,17 @@
 using System.Text;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using PokeBinder.Api;
 using PokeBinder.Core.Identity;
+using PokeBinder.Core.Pricing;
 using PokeBinder.Infrastructure;
 using PokeBinder.Infrastructure.Cards.Import;
 using PokeBinder.Infrastructure.Identity;
+using PokeBinder.Infrastructure.Pricing;
 using PokeBinder.Infrastructure.Seed;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -73,6 +77,27 @@ builder.Services.AddScoped<ICardDataSource>(sp =>
 });
 builder.Services.AddScoped<CardDataImporter>();
 
+// Pricing pipeline (Phase 8). IPriceSourceProvider is MockPriceSourceProvider for now - the
+// pipeline downstream of it doesn't know or care, so swapping in a real provider later is a
+// one-line registration change, nothing else.
+builder.Services.Configure<ClassifierOptions>(builder.Configuration.GetSection("Pricing:Classifier"));
+builder.Services.Configure<PricingScrapeOptions>(builder.Configuration.GetSection("Pricing:Scrape"));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<ClassifierOptions>>().Value);
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<PricingScrapeOptions>>().Value);
+builder.Services.AddScoped<IPriceSourceProvider, MockPriceSourceProvider>();
+builder.Services.AddScoped<IScrapeScopeProvider, BinderScrapeScopeProvider>();
+builder.Services.AddScoped<IListingClassifier, ListingClassifier>();
+builder.Services.AddScoped<IPriceAggregator, PriceAggregator>();
+builder.Services.AddScoped<PriceReaggregationService>();
+builder.Services.AddScoped<PricingScrapeOrchestrator>();
+
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddHangfireServer();
+
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
 {
@@ -115,6 +140,20 @@ app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new LocalhostOnlyDashboardAuthFilter() },
+});
+
+using (var recurringScope = app.Services.CreateScope())
+{
+    var recurringJobs = recurringScope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+    recurringJobs.AddOrUpdate<PricingScrapeOrchestrator>(
+        "nightly-price-scrape",
+        orchestrator => orchestrator.RunAsync(ScrapeTrigger.Nightly, null, null, CancellationToken.None),
+        "30 2 * * *");
+}
 
 app.MapControllers();
 
