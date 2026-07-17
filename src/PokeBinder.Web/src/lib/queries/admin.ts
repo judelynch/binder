@@ -180,6 +180,7 @@ export function useRemoveCardVariant() {
 }
 
 export function useBulkAssignVariants() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({
       filters,
@@ -197,5 +198,18 @@ export function useBulkAssignVariants() {
           dryRun,
         })
       ).data,
+    // A dry run (preview) changes nothing, so only invalidate for a real apply - otherwise every
+    // "Preview counts" click would trigger pointless refetches. Without this, newly-created variant
+    // rows are correctly written to the database (this endpoint's logic was never the bug) but stay
+    // invisible everywhere else in the app - card search results, the set-detail variant list, and
+    // any open card-detail page all keep serving their pre-bulk-assign cached data, which reads as
+    // "it didn't actually apply" even though it did. Same invalidation set as useAddCardVariant/
+    // useRemoveCardVariant just above, which affect one card instead of many.
+    onSuccess: (_data, { dryRun }) => {
+      if (dryRun) return
+      queryClient.invalidateQueries({ queryKey: ['card-search'] })
+      queryClient.invalidateQueries({ queryKey: ['set-cards-full'] })
+      queryClient.invalidateQueries({ queryKey: ['card-detail'] })
+    },
   })
 }

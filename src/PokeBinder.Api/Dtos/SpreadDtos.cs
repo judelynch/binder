@@ -25,3 +25,16 @@ public record BinderSlotDto(
 public record SpreadPanelDto(string Type, int? PageNumber, IReadOnlyList<BinderSlotDto>? Slots);
 
 public record SpreadResponseDto(SpreadPanelDto LeftPanel, SpreadPanelDto RightPanel, int TotalSpreads);
+
+public record SuggestedCardDto(
+    string CardId,
+    string Name,
+    string SetId,
+    string SetName,
+    string Number,
+    string? ImageSmallUrl,
+    string? Rarity,
+    Guid CardVariantId,
+    string Reason);
+
+public record SlotSuggestionsDto(Guid SlotId, IReadOnlyList<SuggestedCardDto> Suggestions);

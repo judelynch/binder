@@ -1,5 +1,7 @@
 import type { OverlayTag } from '../../lib/spread-types'
 
+export type OwnedFilter = 'all' | 'owned' | 'missing'
+
 export function BinderToolbar({
   binderName,
   completenessPercent,
@@ -14,7 +16,17 @@ export function BinderToolbar({
   onToggleOverlays,
   onAddPages,
   onBuildSet,
+  onOpenTableView,
   overlayTags,
+  fullscreenEnabled,
+  onToggleFullscreen,
+  selectMode,
+  onToggleSelectMode,
+  ownedFilter,
+  onOwnedFilterChange,
+  visibleTagIds,
+  onToggleTagVisibility,
+  onResetTagVisibility,
 }: {
   binderName: string
   completenessPercent: number
@@ -29,8 +41,20 @@ export function BinderToolbar({
   onToggleOverlays: () => void
   onAddPages: () => void
   onBuildSet: () => void
+  onOpenTableView: () => void
   overlayTags: OverlayTag[]
+  fullscreenEnabled: boolean
+  onToggleFullscreen: () => void
+  selectMode: boolean
+  onToggleSelectMode: () => void
+  ownedFilter: OwnedFilter
+  onOwnedFilterChange: (filter: OwnedFilter) => void
+  visibleTagIds: ReadonlySet<string> | null
+  onToggleTagVisibility: (tagId: string) => void
+  onResetTagVisibility: () => void
 }) {
+  const tagsAreFiltered = visibleTagIds !== null
+
   return (
     <div className="rounded-t-[14px] border border-border bg-surface p-3.5 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,6 +115,26 @@ export function BinderToolbar({
           </button>
           <button
             type="button"
+            onClick={onToggleSelectMode}
+            aria-pressed={selectMode}
+            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
+              selectMode ? 'border-accent text-accent' : 'border-border text-ink-soft'
+            }`}
+          >
+            Select
+          </button>
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            aria-pressed={fullscreenEnabled}
+            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
+              fullscreenEnabled ? 'border-accent text-accent' : 'border-border text-ink-soft'
+            }`}
+          >
+            {fullscreenEnabled ? 'Exit full screen' : 'Full screen'}
+          </button>
+          <button
+            type="button"
             onClick={onAddPages}
             className="rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-semibold text-accent-ink"
           >
@@ -103,19 +147,61 @@ export function BinderToolbar({
           >
             Populate from set
           </button>
+          <button
+            type="button"
+            onClick={onOpenTableView}
+            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-ink-soft hover:text-ink"
+          >
+            Table view
+          </button>
         </div>
       </div>
 
-      {overlaysEnabled && overlayTags.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
-          {overlayTags.map((tag) => (
-            <div key={tag.id} className="flex items-center gap-1.5 text-[11px] text-ink-soft">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: tag.colourHex }} />
-              {tag.name}
-            </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+        <div className="flex items-center gap-1">
+          {(['all', 'owned', 'missing'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onOwnedFilterChange(option)}
+              aria-pressed={ownedFilter === option}
+              className={`rounded-lg border px-2 py-1 text-[10.5px] font-semibold capitalize ${
+                ownedFilter === option ? 'border-accent text-accent' : 'border-border text-ink-soft'
+              }`}
+            >
+              {option === 'all' ? 'Show all' : option}
+            </button>
           ))}
         </div>
-      )}
+
+        {overlaysEnabled && overlayTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {overlayTags.map((tag) => {
+              const visible = !tagsAreFiltered || visibleTagIds!.has(tag.id)
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => onToggleTagVisibility(tag.id)}
+                  aria-pressed={visible}
+                  title={visible ? `Showing ${tag.name} — click to hide` : `Hidden — click to show ${tag.name}`}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10.5px] font-semibold transition-opacity ${
+                    visible ? 'border-border text-ink-soft' : 'border-border text-ink-faint opacity-40'
+                  }`}
+                >
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: tag.colourHex }} />
+                  {tag.name}
+                </button>
+              )
+            })}
+            {tagsAreFiltered && (
+              <button type="button" onClick={onResetTagVisibility} className="text-[10.5px] font-semibold text-accent">
+                Show all tags
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -19,7 +19,9 @@ export interface CardSearchFilters {
   artist: string
   regulationMarks: string[]
   nationalPokedexNumber: number | null
+  variantTypes: string[]
   sort: SortOption
+  sortDescending: boolean
 }
 
 export const EMPTY_FILTERS: CardSearchFilters = {
@@ -39,7 +41,9 @@ export const EMPTY_FILTERS: CardSearchFilters = {
   artist: '',
   regulationMarks: [],
   nationalPokedexNumber: null,
+  variantTypes: [],
   sort: 'setNumber',
+  sortDescending: true,
 }
 
 export interface CardSearchResult {
@@ -85,6 +89,9 @@ export function describeActiveFilters(filters: CardSearchFilters): ActiveFilterC
   }
   for (const value of filters.regulationMarks) {
     chips.push({ key: `reg-${value}`, label: `Reg. ${value}`, clear: (f) => ({ ...f, regulationMarks: f.regulationMarks.filter((v) => v !== value) }) })
+  }
+  for (const value of filters.variantTypes) {
+    chips.push({ key: `variant-${value}`, label: value, clear: (f) => ({ ...f, variantTypes: f.variantTypes.filter((v) => v !== value) }) })
   }
 
   if (filters.hpMin !== null || filters.hpMax !== null) {

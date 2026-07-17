@@ -261,6 +261,53 @@ public class SlotsController : ControllerBase
         return Ok(new BulkAssignResultDto(plan.Placements.Count, plan.SkippedOccupiedSlots, pagesAdded));
     }
 
+    [HttpPost("bulk-owned")]
+    public async Task<ActionResult<BulkUpdateResultDto>> BulkSetOwned(Guid binderId, BulkUpdateOwnedRequest request, CancellationToken ct)
+    {
+        if (!await OwnsBinderAsync(binderId, ct))
+        {
+            return NotFound();
+        }
+
+        var slotIds = request.SlotIds.Distinct().ToList();
+        var slots = await _db.BinderSlots
+            .Where(s => s.Page!.BinderId == binderId && slotIds.Contains(s.Id) && s.CardVariantId != null)
+            .ToListAsync(ct);
+
+        foreach (var slot in slots)
+        {
+            slot.Owned = request.Owned;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new BulkUpdateResultDto(slots.Count));
+    }
+
+    [HttpPost("bulk-unassign")]
+    public async Task<ActionResult<BulkUpdateResultDto>> BulkUnassign(Guid binderId, BulkUnassignRequest request, CancellationToken ct)
+    {
+        if (!await OwnsBinderAsync(binderId, ct))
+        {
+            return NotFound();
+        }
+
+        var slotIds = request.SlotIds.Distinct().ToList();
+        var slots = await _db.BinderSlots
+            .Where(s => s.Page!.BinderId == binderId && slotIds.Contains(s.Id))
+            .ToListAsync(ct);
+
+        foreach (var slot in slots)
+        {
+            slot.CardVariantId = null;
+            slot.Owned = false;
+            slot.Quantity = null;
+            slot.Condition = null;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new BulkUpdateResultDto(slots.Count));
+    }
+
     private async Task<bool> OwnsBinderAsync(Guid binderId, CancellationToken ct)
     {
         var userId = this.GetUserId();

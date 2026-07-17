@@ -1,6 +1,4 @@
-PART 1 — CLAUDE.md (save this to repo root)
-
-markdown# Project: PokéBinder
+# Project: PokéBinder
 
 A multi-user Pokémon TCG binder collection website. Users create virtual binders
 that render like real physical binders, fill slots with cards from the official
@@ -13,8 +11,11 @@ into a fuller Pokémon TCG website later — keep the architecture open to that.
 - Database: SQL Server, local instance (connection string in appsettings.Development.json,
   Trusted_Connection=True, TrustServerCertificate=True). Managed via SSMS by the owner.
 - Auth: ASP.NET Core Identity with roles: "Admin", "User". JWT bearer tokens for the API.
-- Frontend: React 18 + TypeScript + Vite. React Router. TanStack Query for server state.
-- Styling: Tailwind CSS. Fully responsive (mobile through desktop).
+- Frontend: React 19 + TypeScript + Vite. React Router. TanStack Query for server state.
+- Styling: Tailwind CSS (v4, CSS-first `@theme` tokens in index.css). Fully responsive
+  (mobile through desktop). Single dark theme by deliberate design (no light mode) —
+  see src/PokeBinder.Web/src/index.css for the current tokens ("Case Display": a
+  charcoal ground, shades of #2B2D2F, with a brass accent).
 - Card data source: https://github.com/PokemonTCG/pokemon-tcg-data (JSON files:
   /sets/en.json for sets, /cards/en/<setId>.json for cards).
 - Card images: HOTLINKED from the URLs in the card JSON (images.pokemontcg.io).
@@ -50,6 +51,13 @@ into a fuller Pokémon TCG website later — keep the architecture open to that.
   (enum: NM, LP, MP, HP, DMG), nullable OverlayTagId.
 - OverlayTag: per-user: name (e.g. "Ordered"), colour (hex). Applied to slots,
   toggleable in the binder view.
+- CardOwnership: per-user, per-CardVariant fact ("I own this card variant"),
+  independent of BinderSlot — a card can be owned in your collection before
+  (or without) ever being placed in a binder. Fields: userId, cardVariantId,
+  quantity (int, always >=1 — unmarking deletes the row rather than zeroing
+  it), nullable condition (same enum as BinderSlot). Deliberately never
+  synced with BinderSlot.Owned; the two ownership concepts are separate by
+  design, not an oversight.
 
 ## Binder rendering rules (IMPORTANT — this is the heart of the app)
 - The binder view always shows a two-page spread, like a real open binder.
@@ -68,7 +76,32 @@ into a fuller Pokémon TCG website later — keep the architecture open to that.
 - Overlay tags render as a translucent colour wash + small label chip on the slot,
   with a legend, and a global toggle to show/hide overlays.
 
+## Set & card browsing, collection tracking
+- /sets: grid of every set (logo, series, card count, completion %),
+  filtered/sorted client-side — the catalog is small enough that a server
+  round-trip for this is unnecessary.
+- /sets/:setId: every card in the set, ordered by numberSortKey, one tile
+  per (card, variant) — same visual/interaction pattern as card search
+  (search/ResultsGrid + CardResultTile). Tiles are select-then-bulk-act
+  (see the bulk-endpoint rule below), not click-to-toggle-immediately.
+- /cards/:cardId: full card reference stats (attacks, abilities,
+  weaknesses, resistances, retreat cost, etc. — previously imported but
+  never exposed via the API) plus the current user's own
+  ownership/quantity/condition per variant.
+- Set completion rule: a card counts as "complete" once the user owns
+  every variant of it EXCEPT variants whose VariantType.Name contains
+  "Stamp" (e.g. a "Promo Stamp" variant doesn't block completion). This
+  rule is implemented twice — SQL/LINQ on the backend
+  (SetsController.GetSets) and TypeScript on the frontend
+  (lib/setCompletion.ts) — keep both in sync if it ever changes, and
+  always match case-insensitively (don't rely on the database's default
+  collation for that).
+
 ## Non-negotiable engineering rules
+- Any "select many, then act" UI flow (bulk mark owned/unowned, bulk
+  assign variants, etc.) gets a dedicated bulk API endpoint, not N
+  sequential requests from the frontend. See /api/collection/ownership/bulk
+  and /api/binders/{id}/slots/bulk-* for the pattern to follow.
 - EF Core migrations for ALL schema changes. Never hand-edit the database.
 - All API endpoints require auth except register/login. Users can only access
   their own binders; Admin role gates all /api/admin/* endpoints.

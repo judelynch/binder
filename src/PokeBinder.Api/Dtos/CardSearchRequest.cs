@@ -18,9 +18,13 @@ public class CardSearchRequest
     public string? Artist { get; set; }
     public string[]? RegulationMarks { get; set; }
     public int? NationalPokedexNumber { get; set; }
+    public string[]? VariantTypes { get; set; }
 
     /// <summary>setNumber (default) | name | releaseDate | rarity</summary>
     public string Sort { get; set; } = "setNumber";
+
+    /// <summary>Null = each sort field's natural default direction (name asc, everything else desc). Set explicitly to override.</summary>
+    public bool? SortDescending { get; set; }
 
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 50;

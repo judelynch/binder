@@ -16,3 +16,9 @@ public record BulkAssignRequest(
     [Required, RegularExpression("^(skip|overwrite|fail)$")] string OccupiedStrategy);
 
 public record BulkAssignResultDto(int Placed, int Skipped, int PagesAdded);
+
+public record BulkUpdateOwnedRequest([Required, MinLength(1)] IReadOnlyList<Guid> SlotIds, [Required] bool Owned);
+
+public record BulkUnassignRequest([Required, MinLength(1)] IReadOnlyList<Guid> SlotIds);
+
+public record BulkUpdateResultDto(int Updated);

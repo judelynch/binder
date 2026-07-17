@@ -1,5 +1,5 @@
 import type { PanelSide } from '../../lib/panel-nav'
-import type { BinderSlot, SpreadPanel } from '../../lib/spread-types'
+import type { BinderSlot, SlotSuggestions, SpreadPanel } from '../../lib/spread-types'
 import { Pocket } from './Pocket'
 
 export function PagePanel({
@@ -10,6 +10,14 @@ export function PagePanel({
   greyscaleEnabled,
   overlaysEnabled,
   onOpenSlot,
+  suggestionsBySlot,
+  onOpenSuggestions,
+  onToggleOwned,
+  onQuickRemove,
+  selectMode,
+  selectedSlotIds,
+  onToggleSelect,
+  isSlotDimmed,
 }: {
   panel: SpreadPanel
   side: PanelSide
@@ -18,6 +26,14 @@ export function PagePanel({
   greyscaleEnabled: boolean
   overlaysEnabled: boolean
   onOpenSlot: (slot: BinderSlot) => void
+  suggestionsBySlot?: Map<string, SlotSuggestions>
+  onOpenSuggestions?: (slot: BinderSlot) => void
+  onToggleOwned?: (slot: BinderSlot) => void
+  onQuickRemove?: (slot: BinderSlot) => void
+  selectMode?: boolean
+  selectedSlotIds?: ReadonlySet<string>
+  onToggleSelect?: (slot: BinderSlot) => void
+  isSlotDimmed?: (slot: BinderSlot) => boolean
 }) {
   if (panel.type === 'cover') {
     return (
@@ -41,7 +57,7 @@ export function PagePanel({
         className={`absolute top-6 rounded px-2 py-0.5 text-[10.5px] font-bold text-accent-ink ${
           side === 'left' ? '-left-1.5 rounded-l' : '-right-1.5 rounded-r'
         }`}
-        style={{ background: 'var(--color-accent)' }}
+        style={{ background: binderColourHex }}
       >
         PAGE {panel.pageNumber}
       </div>
@@ -50,9 +66,18 @@ export function PagePanel({
           <Pocket
             key={slot.slotId}
             slot={slot}
+            binderColourHex={binderColourHex}
             greyscaleEnabled={greyscaleEnabled}
             overlaysEnabled={overlaysEnabled}
             onOpen={() => onOpenSlot(slot)}
+            hasSuggestions={(suggestionsBySlot?.get(slot.slotId)?.suggestions.length ?? 0) > 0}
+            onOpenSuggestions={onOpenSuggestions ? () => onOpenSuggestions(slot) : undefined}
+            onToggleOwned={onToggleOwned ? () => onToggleOwned(slot) : undefined}
+            onQuickRemove={onQuickRemove ? () => onQuickRemove(slot) : undefined}
+            selectMode={selectMode}
+            selected={selectedSlotIds?.has(slot.slotId)}
+            onToggleSelect={onToggleSelect ? () => onToggleSelect(slot) : undefined}
+            dimmed={isSlotDimmed ? isSlotDimmed(slot) : false}
           />
         ))}
       </div>

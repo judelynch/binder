@@ -63,7 +63,7 @@ export function CardsManagementPage() {
               {data?.items.map((card) => (
                 <tr key={card.id} className="border-b border-border/60">
                   <td className="py-2 pl-4 pr-3">
-                    <div className="h-12 w-9 overflow-hidden rounded bg-canvas">
+                    <div className="relative h-12 w-9 overflow-hidden rounded bg-canvas">
                       <CardImage src={card.imageSmallUrl} alt={card.name} greyscale={false} />
                     </div>
                   </td>

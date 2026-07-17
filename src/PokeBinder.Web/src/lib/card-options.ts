@@ -31,3 +31,11 @@ export const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: 'releaseDate', label: 'Release date' },
   { value: 'rarity', label: 'Rarity' },
 ]
+
+// Each sort field's natural direction — matches the backend's default when sortDescending is unset.
+export const DEFAULT_SORT_DESCENDING: Record<string, boolean> = {
+  setNumber: true,
+  name: false,
+  releaseDate: true,
+  rarity: true,
+}

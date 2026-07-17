@@ -60,6 +60,7 @@ export function SetChecklistPanel({ defaultBinderId, onClose }: { defaultBinderI
   const { data: setCardsPage } = useFullSetCards(setId || null)
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
   const [variantSelections, setVariantSelections] = useState<Record<string, string[]>>({})
+  const [allVariantsMode, setAllVariantsMode] = useState(false)
   const [binderId, setBinderId] = useState(defaultBinderId ?? '')
   const [strategy, setStrategy] = useState<'skip' | 'overwrite'>('skip')
   const [preview, setPreview] = useState<PreviewResult | null>(null)
@@ -70,7 +71,17 @@ export function SetChecklistPanel({ defaultBinderId, onClose }: { defaultBinderI
   const groups = useMemo(() => groupSetCards(cards), [cards])
 
   function variantsFor(card: CardSummary): string[] {
-    return variantSelections[card.id] ?? (card.variants[0] ? [card.variants[0].id] : [])
+    if (variantSelections[card.id]) return variantSelections[card.id]
+    if (allVariantsMode) return card.variants.map((v) => v.id)
+    return card.variants[0] ? [card.variants[0].id] : []
+  }
+
+  function toggleAllVariantsMode() {
+    // Switch the default for every card at once; per-card manual overrides would otherwise leave a
+    // confusing mix of "all variants" and "just Normal" depending on what was clicked before.
+    setAllVariantsMode((v) => !v)
+    setVariantSelections({})
+    setPreview(null)
   }
 
   function toggleCard(cardId: string) {
@@ -195,6 +206,10 @@ export function SetChecklistPanel({ defaultBinderId, onClose }: { defaultBinderI
                   </option>
                 ))}
               </select>
+              <label className="mt-2.5 flex items-center gap-2 text-xs text-ink-soft">
+                <input type="checkbox" checked={allVariantsMode} onChange={toggleAllVariantsMode} className="h-3.5 w-3.5 accent-[var(--color-accent)]" />
+                Include all variants (master set) — otherwise just each card's default printing
+              </label>
             </div>
 
             {setId && (

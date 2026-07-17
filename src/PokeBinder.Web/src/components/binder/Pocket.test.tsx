@@ -27,7 +27,7 @@ const baseSlot: BinderSlot = {
 function renderPocket(slot: BinderSlot, greyscaleEnabled: boolean) {
   return render(
     <DndContext onDragEnd={() => {}}>
-      <Pocket slot={slot} greyscaleEnabled={greyscaleEnabled} overlaysEnabled={false} onOpen={vi.fn()} />
+      <Pocket slot={slot} binderColourHex="#8B5FA6" greyscaleEnabled={greyscaleEnabled} overlaysEnabled={false} onOpen={vi.fn()} />
     </DndContext>,
   )
 }

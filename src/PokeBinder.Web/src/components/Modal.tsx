@@ -1,13 +1,20 @@
 import { useEffect, type ReactNode } from 'react'
 
+const SIZE_CLASSES = {
+  md: 'md:max-w-md',
+  lg: 'md:max-w-2xl',
+} as const
+
 export function Modal({
   title,
   onClose,
   children,
+  size = 'md',
 }: {
   title: string
   onClose: () => void
   children: ReactNode
+  size?: keyof typeof SIZE_CLASSES
 }) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -24,7 +31,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-5 shadow-2xl md:max-h-[85vh] md:w-full md:max-w-md md:rounded-2xl md:border"
+        className={`relative flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-5 shadow-2xl md:max-h-[85vh] md:w-full md:rounded-2xl md:border ${SIZE_CLASSES[size]}`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>

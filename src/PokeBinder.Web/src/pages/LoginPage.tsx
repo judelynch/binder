@@ -5,8 +5,10 @@ import { useAuth } from '../lib/auth-context'
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  // Dev convenience only: pre-fill a local test account so the form is ready to submit without
+  // retyping it every relaunch. Never populated in a production build.
+  const [email, setEmail] = useState(import.meta.env.DEV ? 'phase6verify@pokebinder.local' : '')
+  const [password, setPassword] = useState(import.meta.env.DEV ? 'Phase6Verify123!' : '')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 

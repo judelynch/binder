@@ -1,17 +1,37 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { BinderFrame } from '../components/binder/BinderFrame'
-import { BinderToolbar } from '../components/binder/BinderToolbar'
+import { BinderToolbar, type OwnedFilter } from '../components/binder/BinderToolbar'
+import { MultiSelectToolbar } from '../components/binder/MultiSelectToolbar'
 import { SlotActionPanel } from '../components/binder/SlotActionPanel'
+import { SuggestionModal } from '../components/binder/SuggestionModal'
 import { Modal } from '../components/Modal'
 import { SearchSlideOver } from '../components/search/SearchSlideOver'
 import { SetChecklistPanel } from '../components/search/SetChecklistPanel'
 import { useBinder } from '../lib/queries/binders'
 import { useOverlayTags } from '../lib/queries/overlay-tags'
-import { useAppendPages, useMoveSlot, useSpread } from '../lib/queries/spread'
+import {
+  useAppendPages,
+  useBulkSetOwned,
+  useBulkUnassignSlots,
+  useMoveSlot,
+  useSpread,
+  useSuggestions,
+  useUnassignSlot,
+  useUpdateSlotState,
+} from '../lib/queries/spread'
 import { clampPanelIndex, formatPanelLabel, formatSpreadLabel, panelIndexToLocation, totalPanels } from '../lib/panel-nav'
 import { useIsMobile } from '../lib/useIsMobile'
-import type { BinderSlot } from '../lib/spread-types'
+import type { BinderSlot, Spread, SlotSuggestions } from '../lib/spread-types'
+
+/** Looks up a slot by id in the current spread, rather than trusting a snapshot taken when a
+ * modal was opened - a snapshot goes stale the moment a mutation inside that modal updates the
+ * spread query cache, so the modal would keep showing pre-mutation owned/tag/condition state. */
+function findSlotInSpread(spread: Spread | undefined, slotId: string | null): BinderSlot | null {
+  if (!spread || !slotId) return null
+  const slots = [...(spread.leftPanel.slots ?? []), ...(spread.rightPanel.slots ?? [])]
+  return slots.find((s) => s.slotId === slotId) ?? null
+}
 
 function AddPagesModal({ binderId, onClose }: { binderId: string; onClose: () => void }) {
   const [count, setCount] = useState(2)
@@ -57,14 +77,21 @@ export function BinderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const binderId = id!
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
 
   const [panelIndex, setPanelIndex] = useState(0)
   const [greyscaleEnabled, setGreyscaleEnabled] = useState(true)
   const [overlaysEnabled, setOverlaysEnabled] = useState(true)
-  const [selectedSlot, setSelectedSlot] = useState<BinderSlot | null>(null)
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [addCardSlotId, setAddCardSlotId] = useState<string | null>(null)
   const [addingPages, setAddingPages] = useState(false)
   const [buildingSet, setBuildingSet] = useState(false)
+  const [suggestingSlot, setSuggestingSlot] = useState<BinderSlot | null>(null)
+  const [fullscreenEnabled, setFullscreenEnabled] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedSlotIds, setSelectedSlotIds] = useState<Set<string>>(new Set())
+  const [ownedFilter, setOwnedFilter] = useState<OwnedFilter>('all')
+  const [visibleTagIds, setVisibleTagIds] = useState<Set<string> | null>(null)
 
   const spreadIndex = Math.floor(panelIndex / 2)
   const side = panelIndexToLocation(panelIndex).side
@@ -72,7 +99,18 @@ export function BinderDetailPage() {
   const { data: binder } = useBinder(binderId)
   const { data: spread, isPending: spreadPending, isError: spreadError } = useSpread(binderId, spreadIndex)
   const { data: overlayTags } = useOverlayTags()
+  const { data: suggestions } = useSuggestions(binderId, spreadIndex)
   const moveSlot = useMoveSlot(binderId, spreadIndex)
+  const updateSlotState = useUpdateSlotState(binderId, spreadIndex)
+  const unassignSlot = useUnassignSlot(binderId, spreadIndex)
+  const bulkSetOwned = useBulkSetOwned(binderId)
+  const bulkUnassign = useBulkUnassignSlots(binderId)
+
+  const suggestionsBySlot = useMemo(() => {
+    const map = new Map<string, SlotSuggestions>()
+    suggestions?.forEach((s) => map.set(s.slotId, s))
+    return map
+  }, [suggestions])
 
   const totalSpreads = spread?.totalSpreads ?? 0
 
@@ -99,11 +137,12 @@ export function BinderDetailPage() {
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
       if (e.key === 'ArrowLeft') goPrev()
       if (e.key === 'ArrowRight') goNext()
+      if (e.key === 'Escape' && fullscreenEnabled) setFullscreenEnabled(false)
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelIndex, totalSpreads, isMobile])
+  }, [panelIndex, totalSpreads, isMobile, fullscreenEnabled])
 
   if (!binder || spreadPending) {
     return (
@@ -118,6 +157,7 @@ export function BinderDetailPage() {
     return <p className="text-sm text-bad">Couldn't load this binder. Try refreshing.</p>
   }
 
+  const selectedSlot = findSlotInSpread(spread, selectedSlotId)
   const completenessPercent = binder.filledSlots > 0 ? (binder.ownedCount / binder.filledSlots) * 100 : 0
   const positionLabel = isMobile
     ? formatPanelLabel(side === 'left' ? spread.leftPanel : spread.rightPanel, binder.pageCount, side)
@@ -125,7 +165,7 @@ export function BinderDetailPage() {
 
   function handleOpenSlot(slot: BinderSlot) {
     if (slot.card) {
-      setSelectedSlot(slot)
+      setSelectedSlotId(slot.slotId)
     } else {
       setAddCardSlotId(slot.slotId)
     }
@@ -135,42 +175,129 @@ export function BinderDetailPage() {
     moveSlot.mutate({ slotId: sourceSlotId, targetSlotId })
   }
 
+  function handleToggleOwned(slot: BinderSlot) {
+    updateSlotState.mutate({ slotId: slot.slotId, owned: !slot.owned })
+  }
+
+  function handleQuickRemove(slot: BinderSlot) {
+    unassignSlot.mutate(slot.slotId)
+  }
+
+  function handleToggleSelectMode() {
+    setSelectMode((v) => !v)
+    setSelectedSlotIds(new Set())
+  }
+
+  function handleToggleSelect(slot: BinderSlot) {
+    setSelectedSlotIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(slot.slotId)) next.delete(slot.slotId)
+      else next.add(slot.slotId)
+      return next
+    })
+  }
+
+  function handleBulkMarkOwned(owned: boolean) {
+    bulkSetOwned.mutate({ slotIds: Array.from(selectedSlotIds), owned }, { onSuccess: () => setSelectedSlotIds(new Set()) })
+  }
+
+  function handleBulkRemove() {
+    bulkUnassign.mutate(Array.from(selectedSlotIds), { onSuccess: () => setSelectedSlotIds(new Set()) })
+  }
+
+  function handleToggleTagVisibility(tagId: string) {
+    setVisibleTagIds((prev) => {
+      const allIds = new Set((overlayTags ?? []).map((t) => t.id))
+      const current = prev ?? allIds
+      const next = new Set(current)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next.size === allIds.size ? null : next
+    })
+  }
+
+  function isSlotDimmed(slot: BinderSlot): boolean {
+    if (ownedFilter === 'owned' && !(slot.card && slot.owned)) return true
+    if (ownedFilter === 'missing' && !(slot.card && !slot.owned)) return true
+    if (visibleTagIds !== null && (!slot.overlayTag || !visibleTagIds.has(slot.overlayTag.id))) return true
+    return false
+  }
+
+  const binderFrame = (
+    <BinderFrame
+      spread={spread}
+      mode={isMobile ? 'single' : 'spread'}
+      singleSide={side}
+      binderColourHex={binder.colourHex}
+      columns={binder.columns}
+      greyscaleEnabled={greyscaleEnabled}
+      overlaysEnabled={overlaysEnabled}
+      onOpenSlot={handleOpenSlot}
+      onMoveSlot={handleMoveSlot}
+      suggestionsBySlot={suggestionsBySlot}
+      onOpenSuggestions={setSuggestingSlot}
+      onToggleOwned={handleToggleOwned}
+      onQuickRemove={handleQuickRemove}
+      selectMode={selectMode}
+      selectedSlotIds={selectedSlotIds}
+      onToggleSelect={handleToggleSelect}
+      isSlotDimmed={isSlotDimmed}
+      canGoPrev={canGoPrev}
+      canGoNext={canGoNext}
+      onNavigatePrev={goPrev}
+      onNavigateNext={goNext}
+    />
+  )
+
   return (
-    <div className="mx-auto max-w-4xl">
-      <BinderToolbar
-        binderName={binder.name}
-        completenessPercent={completenessPercent}
-        positionLabel={positionLabel}
-        onPrev={goPrev}
-        onNext={goNext}
-        canGoPrev={canGoPrev}
-        canGoNext={canGoNext}
-        greyscaleEnabled={greyscaleEnabled}
-        onToggleGreyscale={() => setGreyscaleEnabled((v) => !v)}
-        overlaysEnabled={overlaysEnabled}
-        onToggleOverlays={() => setOverlaysEnabled((v) => !v)}
-        onAddPages={() => setAddingPages(true)}
-        onBuildSet={() => setBuildingSet(true)}
-        overlayTags={overlayTags ?? []}
-      />
-      <BinderFrame
-        spread={spread}
-        mode={isMobile ? 'single' : 'spread'}
-        singleSide={side}
-        binderColourHex={binder.colourHex}
-        columns={binder.columns}
-        greyscaleEnabled={greyscaleEnabled}
-        overlaysEnabled={overlaysEnabled}
-        onOpenSlot={handleOpenSlot}
-        onMoveSlot={handleMoveSlot}
-      />
+    <div className={fullscreenEnabled ? 'fixed inset-0 z-40 overflow-y-auto bg-canvas p-4' : 'mx-auto max-w-4xl'}>
+      <div className={fullscreenEnabled ? 'mx-auto max-w-5xl' : ''}>
+        <BinderToolbar
+          binderName={binder.name}
+          completenessPercent={completenessPercent}
+          positionLabel={positionLabel}
+          onPrev={goPrev}
+          onNext={goNext}
+          canGoPrev={canGoPrev}
+          canGoNext={canGoNext}
+          greyscaleEnabled={greyscaleEnabled}
+          onToggleGreyscale={() => setGreyscaleEnabled((v) => !v)}
+          overlaysEnabled={overlaysEnabled}
+          onToggleOverlays={() => setOverlaysEnabled((v) => !v)}
+          onAddPages={() => setAddingPages(true)}
+          onBuildSet={() => setBuildingSet(true)}
+          onOpenTableView={() => navigate(`/binders/${binderId}/table`)}
+          overlayTags={overlayTags ?? []}
+          fullscreenEnabled={fullscreenEnabled}
+          onToggleFullscreen={() => setFullscreenEnabled((v) => !v)}
+          selectMode={selectMode}
+          onToggleSelectMode={handleToggleSelectMode}
+          ownedFilter={ownedFilter}
+          onOwnedFilterChange={setOwnedFilter}
+          visibleTagIds={visibleTagIds}
+          onToggleTagVisibility={handleToggleTagVisibility}
+          onResetTagVisibility={() => setVisibleTagIds(null)}
+        />
+        {binderFrame}
+
+        {selectMode && (
+          <MultiSelectToolbar
+            selectedCount={selectedSlotIds.size}
+            onMarkOwned={() => handleBulkMarkOwned(true)}
+            onMarkNotOwned={() => handleBulkMarkOwned(false)}
+            onRemove={handleBulkRemove}
+            onClear={() => setSelectedSlotIds(new Set())}
+            isPending={bulkSetOwned.isPending || bulkUnassign.isPending}
+          />
+        )}
+      </div>
 
       {selectedSlot && (
         <SlotActionPanel
           binderId={binderId}
           spreadIndex={spreadIndex}
           slot={selectedSlot}
-          onClose={() => setSelectedSlot(null)}
+          onClose={() => setSelectedSlotId(null)}
         />
       )}
       {addCardSlotId && (
@@ -178,6 +305,15 @@ export function BinderDetailPage() {
       )}
       {addingPages && <AddPagesModal binderId={binderId} onClose={() => setAddingPages(false)} />}
       {buildingSet && <SetChecklistPanel defaultBinderId={binderId} onClose={() => setBuildingSet(false)} />}
+      {suggestingSlot && (
+        <SuggestionModal
+          slot={suggestingSlot}
+          suggestions={suggestionsBySlot.get(suggestingSlot.slotId)?.suggestions ?? []}
+          binderId={binderId}
+          spreadIndex={spreadIndex}
+          onClose={() => setSuggestingSlot(null)}
+        />
+      )}
     </div>
   )
 }

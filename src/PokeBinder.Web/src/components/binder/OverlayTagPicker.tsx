@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BINDER_COLOURS } from '../../lib/binder-colours'
-import { useCreateOverlayTag } from '../../lib/queries/overlay-tags'
+import { useCreateOverlayTag, useDeleteOverlayTag } from '../../lib/queries/overlay-tags'
 import type { OverlayTag } from '../../lib/spread-types'
 
 export function OverlayTagPicker({
@@ -15,7 +15,9 @@ export function OverlayTagPicker({
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [colourHex, setColourHex] = useState(BINDER_COLOURS[0].hex)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const createTag = useCreateOverlayTag()
+  const deleteTag = useDeleteOverlayTag()
 
   function handleCreate() {
     if (!name.trim()) return
@@ -31,6 +33,15 @@ export function OverlayTagPicker({
     )
   }
 
+  function handleDelete(tagId: string) {
+    deleteTag.mutate(tagId, {
+      onSuccess: () => {
+        setDeletingId(null)
+        if (selectedId === tagId) onSelect(null)
+      },
+    })
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
@@ -43,20 +54,51 @@ export function OverlayTagPicker({
       >
         None
       </button>
-      {tags.map((tag) => (
-        <button
-          type="button"
-          key={tag.id}
-          onClick={() => onSelect(tag.id)}
-          aria-pressed={selectedId === tag.id}
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-            selectedId === tag.id ? 'border-accent text-ink' : 'border-border text-ink-soft'
-          }`}
-        >
-          <span className="h-2 w-2 rounded-full" style={{ background: tag.colourHex }} />
-          {tag.name}
-        </button>
-      ))}
+      {tags.map((tag) =>
+        deletingId === tag.id ? (
+          <span
+            key={tag.id}
+            className="flex items-center gap-1.5 rounded-full border border-bad/40 bg-bad/10 py-1 pl-2.5 pr-1 text-xs font-semibold text-ink"
+          >
+            Delete "{tag.name}"?
+            <button
+              type="button"
+              onClick={() => handleDelete(tag.id)}
+              disabled={deleteTag.isPending}
+              className="rounded-full bg-bad px-2 py-0.5 text-[10.5px] font-semibold text-white disabled:opacity-50"
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeletingId(null)}
+              className="rounded-full border border-border px-2 py-0.5 text-[10.5px] font-semibold text-ink-soft"
+            >
+              No
+            </button>
+          </span>
+        ) : (
+          <span
+            key={tag.id}
+            className={`flex items-center gap-1 rounded-full border py-1 pl-2.5 pr-1 text-xs font-semibold ${
+              selectedId === tag.id ? 'border-accent text-ink' : 'border-border text-ink-soft'
+            }`}
+          >
+            <button type="button" onClick={() => onSelect(tag.id)} aria-pressed={selectedId === tag.id} className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: tag.colourHex }} />
+              {tag.name}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeletingId(tag.id)}
+              aria-label={`Delete tag ${tag.name}`}
+              className="flex h-4 w-4 items-center justify-center rounded-full text-ink-faint opacity-60 transition-opacity hover:text-bad hover:opacity-100"
+            >
+              ×
+            </button>
+          </span>
+        ),
+      )}
 
       {creating ? (
         <div className="mt-2 flex w-full items-center gap-2">

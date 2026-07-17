@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PokeBinder.Api.Dtos;
 using PokeBinder.Core.Binders;
+using PokeBinder.Core.Cards;
 using PokeBinder.Infrastructure;
 
 namespace PokeBinder.Api.Controllers;
@@ -194,6 +195,38 @@ public class BindersController : ControllerBase
         return Ok(ToSummary(binder));
     }
 
+    [HttpGet("{id:guid}/cards")]
+    public async Task<ActionResult<IReadOnlyList<BinderCardRowDto>>> GetBinderCards(Guid id, CancellationToken ct)
+    {
+        var userId = this.GetUserId();
+        var exists = await _db.Binders.AnyAsync(b => b.Id == id && b.OwnerId == userId, ct);
+        if (!exists)
+        {
+            return NotFound();
+        }
+
+        var rows = await _db.BinderSlots
+            .Where(s => s.Page!.BinderId == id && s.CardVariantId != null)
+            .OrderBy(s => s.Page!.PageNumber).ThenBy(s => s.Position)
+            .Select(s => new BinderCardRowDto(
+                s.Id,
+                s.Page!.PageNumber,
+                s.Position,
+                s.CardVariant!.Card!.Id,
+                s.CardVariant.Card.Name,
+                s.CardVariant.Card.SetId,
+                s.CardVariant.Card.Set!.Name,
+                s.CardVariant.Card.Number,
+                s.CardVariant.Card.Set.ReleaseDate.Year,
+                s.Owned,
+                s.OverlayTag == null ? (Guid?)null : s.OverlayTag.Id,
+                s.OverlayTag == null ? null : s.OverlayTag.Name,
+                s.OverlayTag == null ? null : s.OverlayTag.ColourHex))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
     [HttpGet("{id:guid}/spread/{spreadIndex:int}")]
     public async Task<ActionResult<SpreadResponseDto>> GetSpread(Guid id, int spreadIndex, CancellationToken ct)
     {
@@ -227,6 +260,154 @@ public class BindersController : ControllerBase
 
         return Ok(new SpreadResponseDto(leftPanel, rightPanel, spread.TotalSpreads));
     }
+
+    [HttpGet("{id:guid}/spread/{spreadIndex:int}/suggestions")]
+    public async Task<ActionResult<IReadOnlyList<SlotSuggestionsDto>>> GetSuggestions(Guid id, int spreadIndex, CancellationToken ct)
+    {
+        var userId = this.GetUserId();
+        var binder = await _db.Binders
+            .Where(b => b.Id == id && b.OwnerId == userId)
+            .Select(b => new { b.Id, PageCount = b.Pages.Count })
+            .FirstOrDefaultAsync(ct);
+
+        if (binder is null)
+        {
+            return NotFound();
+        }
+
+        SpreadResult spread;
+        try
+        {
+            spread = SpreadCalculator.GetSpread(binder.PageCount, spreadIndex);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return NotFound();
+        }
+
+        var relevantPages = new HashSet<int>();
+        if (spread.Left.Type == SpreadPanelType.Page) relevantPages.Add(spread.Left.PageNumber!.Value);
+        if (spread.Right.Type == SpreadPanelType.Page) relevantPages.Add(spread.Right.PageNumber!.Value);
+
+        if (relevantPages.Count == 0)
+        {
+            return Ok(Array.Empty<SlotSuggestionsDto>());
+        }
+
+        var placedRaw = await _db.BinderSlots
+            .Where(s => s.Page!.BinderId == id && s.CardVariantId != null)
+            .Select(s => new
+            {
+                s.Id,
+                PageNumber = s.Page!.PageNumber,
+                CardId = s.CardVariant!.Card!.Id,
+                s.CardVariant.Card.Name,
+                s.CardVariant.Card.SetId,
+                ReleaseDate = s.CardVariant.Card.Set!.ReleaseDate,
+                s.CardVariant.Card.NumberSortGroup,
+                s.CardVariant.Card.NumberSortPrefix,
+                s.CardVariant.Card.NumberSortValue,
+                s.CardVariant.Card.NumberSortSuffix,
+                s.CardVariant.Card.Rarity,
+                s.CardVariant.Card.Types,
+            })
+            .ToListAsync(ct);
+
+        if (placedRaw.Count == 0)
+        {
+            return Ok(Array.Empty<SlotSuggestionsDto>());
+        }
+
+        var placedCards = placedRaw
+            .Select(p => new PlacedCard(
+                p.Id, p.CardId, p.Name, p.SetId, p.ReleaseDate,
+                new SortKey(p.NumberSortGroup, p.NumberSortPrefix, p.NumberSortValue, p.NumberSortSuffix),
+                p.Rarity, p.Types))
+            .ToList();
+
+        var normalVariantTypeId = await _db.VariantTypes.Where(v => v.Name == "Normal").Select(v => v.Id).SingleAsync(ct);
+
+        var setIds = placedCards.Select(p => p.SetId).Distinct().ToList();
+        var setCatalog = (await ProjectCatalogRows(_db.Cards.Where(c => setIds.Contains(c.SetId)), normalVariantTypeId).ToListAsync(ct))
+            .Select(ToCatalogCard)
+            .GroupBy(c => c.SetId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<CatalogCard>)g.ToList());
+
+        var names = placedCards.Select(p => p.Name).Distinct().ToList();
+        var nameCatalog = (await ProjectCatalogRows(_db.Cards.Where(c => names.Contains(c.Name)), normalVariantTypeId).ToListAsync(ct))
+            .Select(ToCatalogCard)
+            .GroupBy(c => c.Name)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<CatalogCard>)g.ToList());
+
+        var themeKeys = placedCards
+            .Where(p => p.Rarity != null)
+            .SelectMany(p => p.Types.Select(t => new ThemeKey(p.Rarity!, t)))
+            .Distinct()
+            .ToList();
+
+        var themeCatalog = new Dictionary<ThemeKey, IReadOnlyList<CatalogCard>>();
+        if (themeKeys.Count > 0)
+        {
+            var rarities = themeKeys.Select(k => k.Rarity).Distinct().ToList();
+            var types = themeKeys.Select(k => k.Type).Distinct().ToList();
+            var themeCandidates = (await ProjectCatalogRows(
+                    _db.Cards.Where(c => c.Rarity != null && rarities.Contains(c.Rarity) && c.TypeRows.Any(t => types.Contains(t.Type))),
+                    normalVariantTypeId)
+                .ToListAsync(ct))
+                .Select(ToCatalogCard)
+                .ToList();
+
+            foreach (var key in themeKeys)
+            {
+                themeCatalog[key] = themeCandidates.Where(c => c.Rarity == key.Rarity && c.Types.Contains(key.Type)).ToList();
+            }
+        }
+
+        var suggestionsBySlot = SuggestionEngine.ComputeSuggestions(placedCards, setCatalog, nameCatalog, themeCatalog);
+
+        var slotPageLookup = placedRaw.ToDictionary(p => p.Id, p => p.PageNumber);
+        var relevantSuggestions = suggestionsBySlot
+            .Where(kv => relevantPages.Contains(slotPageLookup.GetValueOrDefault(kv.Key)))
+            .ToList();
+
+        if (relevantSuggestions.Count == 0)
+        {
+            return Ok(Array.Empty<SlotSuggestionsDto>());
+        }
+
+        var suggestedCardIds = relevantSuggestions.SelectMany(kv => kv.Value).Select(s => s.CardId).Distinct().ToList();
+        var displayInfo = await _db.Cards
+            .Where(c => suggestedCardIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.Number, c.ImageSmallUrl, c.SetId, c.Rarity, SetName = c.Set!.Name })
+            .ToDictionaryAsync(c => c.Id, ct);
+
+        var result = relevantSuggestions
+            .Select(kv => new SlotSuggestionsDto(
+                kv.Key,
+                kv.Value.Select(s =>
+                {
+                    var display = displayInfo[s.CardId];
+                    return new SuggestedCardDto(s.CardId, s.Name, s.SetId, display.SetName, display.Number, display.ImageSmallUrl, display.Rarity, s.DefaultVariantId, s.Reason.ToString());
+                }).ToList()))
+            .ToList();
+
+        return Ok(result);
+    }
+
+    private record CardCatalogRow(
+        string Id, string Name, string SetId, DateOnly ReleaseDate,
+        byte NumberSortGroup, string NumberSortPrefix, int NumberSortValue, string NumberSortSuffix,
+        string? Rarity, IReadOnlyList<string> Types, Guid DefaultVariantId);
+
+    private static IQueryable<CardCatalogRow> ProjectCatalogRows(IQueryable<Card> query, Guid normalVariantTypeId) =>
+        query.Select(c => new CardCatalogRow(
+            c.Id, c.Name, c.SetId, c.Set!.ReleaseDate,
+            c.NumberSortGroup, c.NumberSortPrefix, c.NumberSortValue, c.NumberSortSuffix,
+            c.Rarity, c.Types,
+            c.Variants.Where(v => v.VariantTypeId == normalVariantTypeId).Select(v => v.Id).FirstOrDefault()));
+
+    private static CatalogCard ToCatalogCard(CardCatalogRow r) =>
+        new(r.Id, r.Name, r.SetId, r.ReleaseDate, new SortKey(r.NumberSortGroup, r.NumberSortPrefix, r.NumberSortValue, r.NumberSortSuffix), r.Rarity, r.Types, r.DefaultVariantId);
 
     private async Task<SpreadPanelDto> BuildPanelAsync(Guid binderId, SpreadPanel panel, CancellationToken ct)
     {

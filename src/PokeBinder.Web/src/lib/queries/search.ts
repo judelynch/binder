@@ -6,7 +6,12 @@ import type { CardSearchFilters, CardSearchResult } from '../search-types'
 export const SELECT_ALL_CAP = 500
 
 function buildParams(filters: CardSearchFilters, page: number, pageSize: number) {
-  const params: Record<string, string | number | string[]> = { page, pageSize, sort: filters.sort }
+  const params: Record<string, string | number | boolean | string[]> = {
+    page,
+    pageSize,
+    sort: filters.sort,
+    sortDescending: filters.sortDescending,
+  }
 
   if (filters.name) params.name = filters.name
   if (filters.supertype) params.supertype = filters.supertype
@@ -24,6 +29,7 @@ function buildParams(filters: CardSearchFilters, page: number, pageSize: number)
   if (filters.artist) params.artist = filters.artist
   if (filters.regulationMarks.length) params.regulationMarks = filters.regulationMarks
   if (filters.nationalPokedexNumber !== null) params.nationalPokedexNumber = filters.nationalPokedexNumber
+  if (filters.variantTypes.length) params.variantTypes = filters.variantTypes
 
   return params
 }

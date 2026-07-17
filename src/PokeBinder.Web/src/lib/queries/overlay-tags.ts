@@ -21,3 +21,31 @@ export function useCreateOverlayTag() {
     },
   })
 }
+
+export function useUpdateOverlayTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...input }: { id: string; name?: string; colourHex?: string }) =>
+      (await api.patch<OverlayTag>(`/overlay-tags/${id}`, input)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: overlayTagsKey })
+    },
+  })
+}
+
+/** Deleting a tag definition also un-assigns it from every slot that had it (server-side SetNull),
+ * so any currently-open binder spread needs to refetch too - invalidate broadly rather than
+ * plumbing a binderId through, since this hook has no reason to otherwise know which binder(s)
+ * are affected. */
+export function useDeleteOverlayTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/overlay-tags/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: overlayTagsKey })
+      queryClient.invalidateQueries({ queryKey: ['spread'] })
+    },
+  })
+}

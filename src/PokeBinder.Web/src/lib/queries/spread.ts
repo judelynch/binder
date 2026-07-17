@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import type { BinderSlot, SlotCondition, Spread } from '../spread-types'
+import type { BinderSlot, SlotCondition, SlotSuggestions, Spread } from '../spread-types'
 import { bindersKey, dashboardKey } from './binders'
 
 export function spreadKey(binderId: string, spreadIndex: number) {
@@ -11,6 +11,18 @@ export function useSpread(binderId: string, spreadIndex: number) {
   return useQuery({
     queryKey: spreadKey(binderId, spreadIndex),
     queryFn: async () => (await api.get<Spread>(`/binders/${binderId}/spread/${spreadIndex}`)).data,
+    enabled: spreadIndex >= 0,
+  })
+}
+
+export function suggestionsKey(binderId: string, spreadIndex: number) {
+  return ['spread-suggestions', binderId, spreadIndex] as const
+}
+
+export function useSuggestions(binderId: string, spreadIndex: number) {
+  return useQuery({
+    queryKey: suggestionsKey(binderId, spreadIndex),
+    queryFn: async () => (await api.get<SlotSuggestions[]>(`/binders/${binderId}/spread/${spreadIndex}/suggestions`)).data,
     enabled: spreadIndex >= 0,
   })
 }
@@ -154,6 +166,52 @@ export function useMoveSlot(binderId: string, spreadIndex: number) {
         next = replaceSlotInSpread(next, target)
         return next
       })
+      invalidateSpreadAndSummaries(queryClient, binderId)
+    },
+  })
+}
+
+/** Places a suggested card starting from the slot whose bulb was clicked, skipping forward to the next empty slot. */
+export function useAddSuggestedCard(binderId: string, spreadIndex: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ fromSlotId, cardVariantId }: { fromSlotId: string; cardVariantId: string }) =>
+      (
+        await api.post(`/binders/${binderId}/slots/bulk-assign`, {
+          startSlotId: fromSlotId,
+          cardVariantIds: [cardVariantId],
+          occupiedStrategy: 'skip',
+        })
+      ).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(binderId, spreadIndex) })
+      invalidateSpreadAndSummaries(queryClient, binderId)
+    },
+  })
+}
+
+/** Cross-page bulk operations (multi-select): span pages beyond the currently-loaded spread, so
+ * rather than trying to optimistically patch every affected spread's cache, we just invalidate
+ * everything spread-related for this binder and let it refetch. */
+export function useBulkSetOwned(binderId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ slotIds, owned }: { slotIds: string[]; owned: boolean }) =>
+      (await api.post<{ updated: number }>(`/binders/${binderId}/slots/bulk-owned`, { slotIds, owned })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['spread-suggestions', binderId] })
+      invalidateSpreadAndSummaries(queryClient, binderId)
+    },
+  })
+}
+
+export function useBulkUnassignSlots(binderId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (slotIds: string[]) =>
+      (await api.post<{ updated: number }>(`/binders/${binderId}/slots/bulk-unassign`, { slotIds })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['spread-suggestions', binderId] })
       invalidateSpreadAndSummaries(queryClient, binderId)
     },
   })

@@ -41,3 +41,22 @@ export interface Spread {
   rightPanel: SpreadPanel
   totalSpreads: number
 }
+
+export type SuggestionReason = 'NextInSet' | 'NextRelease' | 'SameThemeRarity'
+
+export interface SuggestedCard {
+  cardId: string
+  name: string
+  setId: string
+  setName: string
+  number: string
+  imageSmallUrl: string | null
+  rarity: string | null
+  cardVariantId: string
+  reason: SuggestionReason
+}
+
+export interface SlotSuggestions {
+  slotId: string
+  suggestions: SuggestedCard[]
+}

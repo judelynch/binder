@@ -94,6 +94,11 @@ public static class CardFilterExtensions
             query = query.Where(c => c.PokedexNumbers.Any(p => p.Number == request.NationalPokedexNumber));
         }
 
+        if (request.VariantTypes is { Length: > 0 })
+        {
+            query = query.Where(c => c.Variants.Any(v => v.VariantType != null && request.VariantTypes.Contains(v.VariantType.Name)));
+        }
+
         return query;
     }
 }
