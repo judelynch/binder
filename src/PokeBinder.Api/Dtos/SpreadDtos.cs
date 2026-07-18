@@ -16,6 +16,7 @@ public record BinderSlotDto(
     Guid SlotId,
     int Position,
     CardSlotSummaryDto? Card,
+    Guid? CardVariantId,
     string? VariantTypeName,
     bool Owned,
     int? Quantity,

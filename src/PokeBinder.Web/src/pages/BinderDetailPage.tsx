@@ -15,6 +15,7 @@ import {
   useBulkSetOwned,
   useBulkUnassignSlots,
   useMoveSlot,
+  usePrices,
   useSpread,
   useSuggestions,
   useUnassignSlot,
@@ -22,6 +23,7 @@ import {
 } from '../lib/queries/spread'
 import { clampPanelIndex, formatPanelLabel, formatSpreadLabel, panelIndexToLocation, totalPanels } from '../lib/panel-nav'
 import { useIsMobile } from '../lib/useIsMobile'
+import type { CardVariantPrice } from '../lib/pricing-types'
 import type { BinderSlot, Spread, SlotSuggestions } from '../lib/spread-types'
 
 /** Looks up a slot by id in the current spread, rather than trusting a snapshot taken when a
@@ -100,6 +102,7 @@ export function BinderDetailPage() {
   const { data: spread, isPending: spreadPending, isError: spreadError } = useSpread(binderId, spreadIndex)
   const { data: overlayTags } = useOverlayTags()
   const { data: suggestions } = useSuggestions(binderId, spreadIndex)
+  const { data: priceSummary } = usePrices(binderId)
   const moveSlot = useMoveSlot(binderId, spreadIndex)
   const updateSlotState = useUpdateSlotState(binderId, spreadIndex)
   const unassignSlot = useUnassignSlot(binderId, spreadIndex)
@@ -111,6 +114,12 @@ export function BinderDetailPage() {
     suggestions?.forEach((s) => map.set(s.slotId, s))
     return map
   }, [suggestions])
+
+  const priceByCardVariantId = useMemo(() => {
+    const map = new Map<string, CardVariantPrice>()
+    priceSummary?.prices.forEach((p) => map.set(p.cardVariantId, p))
+    return map
+  }, [priceSummary])
 
   const totalSpreads = spread?.totalSpreads ?? 0
 
@@ -246,6 +255,7 @@ export function BinderDetailPage() {
       canGoNext={canGoNext}
       onNavigatePrev={goPrev}
       onNavigateNext={goNext}
+      priceByCardVariantId={priceByCardVariantId}
     />
   )
 
@@ -277,6 +287,8 @@ export function BinderDetailPage() {
           visibleTagIds={visibleTagIds}
           onToggleTagVisibility={handleToggleTagVisibility}
           onResetTagVisibility={() => setVisibleTagIds(null)}
+          ownedValueGbp={priceSummary?.ownedValueGbp}
+          missingCostGbp={priceSummary?.missingCostGbp}
         />
         {binderFrame}
 
@@ -297,6 +309,7 @@ export function BinderDetailPage() {
           binderId={binderId}
           spreadIndex={spreadIndex}
           slot={selectedSlot}
+          price={selectedSlot.cardVariantId ? priceByCardVariantId.get(selectedSlot.cardVariantId) : null}
           onClose={() => setSelectedSlotId(null)}
         />
       )}

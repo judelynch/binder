@@ -21,6 +21,7 @@ export interface BinderSlot {
   slotId: string
   position: number
   card: CardSlotSummary | null
+  cardVariantId: string | null
   variantTypeName: string | null
   owned: boolean
   quantity: number | null

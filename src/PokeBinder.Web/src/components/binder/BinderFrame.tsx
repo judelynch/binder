@@ -2,6 +2,7 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type Dra
 import { useEffect, useRef, useState } from 'react'
 import { resolveDragMove } from '../../lib/dnd'
 import type { PanelSide } from '../../lib/panel-nav'
+import type { CardVariantPrice } from '../../lib/pricing-types'
 import type { BinderSlot, SlotSuggestions, Spread } from '../../lib/spread-types'
 import { CardImage } from './CardImage'
 import { PagePanel } from './PagePanel'
@@ -32,6 +33,7 @@ export function BinderFrame({
   canGoNext,
   onNavigatePrev,
   onNavigateNext,
+  priceByCardVariantId,
 }: {
   spread: Spread
   mode: 'spread' | 'single'
@@ -54,6 +56,7 @@ export function BinderFrame({
   canGoNext?: boolean
   onNavigatePrev?: () => void
   onNavigateNext?: () => void
+  priceByCardVariantId?: Map<string, CardVariantPrice>
 }) {
   const [activeSlot, setActiveSlot] = useState<BinderSlot | null>(null)
 
@@ -148,6 +151,7 @@ export function BinderFrame({
     selectedSlotIds,
     onToggleSelect,
     isSlotDimmed,
+    priceByCardVariantId,
   })
 
   return (

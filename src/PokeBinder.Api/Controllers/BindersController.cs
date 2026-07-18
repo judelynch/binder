@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using PokeBinder.Api.Dtos;
 using PokeBinder.Core.Binders;
 using PokeBinder.Core.Cards;
+using PokeBinder.Core.Pricing;
 using PokeBinder.Infrastructure;
 
 namespace PokeBinder.Api.Controllers;
@@ -394,6 +395,93 @@ public class BindersController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Best-available price per card-variant currently assigned to this binder (any page, not just
+    /// the loaded spread), plus binder-wide owned-value/missing-cost totals. "Best-available" =
+    /// the cheapest published raw bucket for that variant, per the pricing plan's architecture
+    /// decision - used identically for both the totals here and a greyed slot's cost-to-buy badge.
+    /// Slots whose variant has no price data yet simply don't contribute to the totals (rather than
+    /// making the whole total null), since that's the common state before enough listings accumulate.
+    /// </summary>
+    [HttpGet("{id:guid}/prices")]
+    public async Task<ActionResult<BinderPriceSummaryDto>> GetPrices(Guid id, CancellationToken ct)
+    {
+        var userId = this.GetUserId();
+        var binderExists = await _db.Binders.AnyAsync(b => b.Id == id && b.OwnerId == userId, ct);
+        if (!binderExists)
+        {
+            return NotFound();
+        }
+
+        var slots = await _db.BinderSlots
+            .Where(s => s.Page!.BinderId == id && s.CardVariantId != null)
+            .Select(s => new { CardVariantId = s.CardVariantId!.Value, s.Owned, s.Quantity })
+            .ToListAsync(ct);
+
+        var variantIds = slots.Select(s => s.CardVariantId).Distinct().ToList();
+        if (variantIds.Count == 0)
+        {
+            return Ok(new BinderPriceSummaryDto(null, null, Array.Empty<CardVariantPriceDto>()));
+        }
+
+        var pricePoints = await _db.PricePoints
+            .Where(p => variantIds.Contains(p.CardVariantId) && p.QuarantinedReason == null)
+            .ToListAsync(ct);
+        var scrapedAtByVariant = await _db.CardVariantScrapeStates
+            .Where(s => variantIds.Contains(s.CardVariantId))
+            .ToDictionaryAsync(s => s.CardVariantId, s => s.LastScrapedAt, ct);
+
+        var prices = pricePoints
+            .GroupBy(p => p.CardVariantId)
+            .Select(g => ToCardVariantPriceDto(g.Key, g.ToList(), scrapedAtByVariant.GetValueOrDefault(g.Key)))
+            .ToList();
+        var bestAvailableByVariant = prices.ToDictionary(p => p.CardVariantId, p => p.BestAvailableItemOnlyGbp);
+
+        decimal? ownedValue = null;
+        decimal? missingCost = null;
+        foreach (var slot in slots)
+        {
+            if (!bestAvailableByVariant.TryGetValue(slot.CardVariantId, out var price) || price is null)
+            {
+                continue;
+            }
+
+            if (slot.Owned)
+            {
+                ownedValue = (ownedValue ?? 0m) + price.Value * (slot.Quantity ?? 1);
+            }
+            else
+            {
+                missingCost = (missingCost ?? 0m) + price.Value;
+            }
+        }
+
+        return Ok(new BinderPriceSummaryDto(ownedValue, missingCost, prices));
+    }
+
+    private static CardVariantPriceDto ToCardVariantPriceDto(Guid cardVariantId, List<PricePoint> points, DateTime? lastScrapedAt)
+    {
+        PriceBucketDto ToBucket(PricePoint p) => new(
+            p.GradedStatus.ToString(), p.Grader, p.Grade, p.Condition?.ToString(),
+            p.WindowDays, p.ItemOnlyMedianGbp, p.DeliveredMedianGbp, p.SampleCount, p.LastSaleDate);
+
+        var rawPoints = points.Where(p => p.GradedStatus == GradedStatus.Raw).ToList();
+        var rawBuckets = rawPoints.OrderBy(p => p.Condition).ThenBy(p => p.WindowDays).Select(ToBucket).ToList();
+        var gradedBuckets = points.Where(p => p.GradedStatus == GradedStatus.Graded)
+            .OrderBy(p => p.Grader).ThenByDescending(p => p.Grade).ThenBy(p => p.WindowDays)
+            .Select(ToBucket).ToList();
+
+        var cheapestRaw = rawPoints.OrderBy(p => p.ItemOnlyMedianGbp).FirstOrDefault();
+
+        return new CardVariantPriceDto(
+            cardVariantId,
+            cheapestRaw?.ItemOnlyMedianGbp,
+            cheapestRaw?.DeliveredMedianGbp,
+            rawBuckets,
+            gradedBuckets,
+            lastScrapedAt);
+    }
+
     private record CardCatalogRow(
         string Id, string Name, string SetId, DateOnly ReleaseDate,
         byte NumberSortGroup, string NumberSortPrefix, int NumberSortValue, string NumberSortSuffix,
@@ -431,6 +519,7 @@ public class BindersController : ControllerBase
                     s.CardVariant.Card.Set!.Name,
                     s.CardVariant.Card.Number,
                     s.CardVariant.Card.Rarity),
+                s.CardVariantId,
                 s.CardVariant == null ? null : s.CardVariant.VariantType!.Name,
                 s.Owned,
                 s.Quantity,

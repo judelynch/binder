@@ -2,20 +2,91 @@ import { useState } from 'react'
 import { Modal } from '../Modal'
 import { useOverlayTags } from '../../lib/queries/overlay-tags'
 import { useSetOverlayTag, useUnassignSlot, useUpdateSlotState } from '../../lib/queries/spread'
+import { isStale, pickBucket, type CardVariantPrice } from '../../lib/pricing-types'
 import type { BinderSlot, SlotCondition } from '../../lib/spread-types'
 import { OverlayTagPicker } from './OverlayTagPicker'
 
 const CONDITIONS: SlotCondition[] = ['NM', 'LP', 'MP', 'HP', 'DMG']
 
+function PriceSection({ price, slotCondition }: { price: CardVariantPrice; slotCondition: string | null }) {
+  const [showDelivered, setShowDelivered] = useState(false)
+
+  const targetCondition = slotCondition ?? 'Unspecified'
+  const rawBucket =
+    pickBucket(price.rawBuckets, (b) => b.condition === targetCondition) ?? pickBucket(price.rawBuckets, () => true)
+  const psa10 = pickBucket(price.gradedBuckets, (b) => b.grader === 'PSA' && b.grade === 10)
+  const psa9 = pickBucket(price.gradedBuckets, (b) => b.grader === 'PSA' && b.grade === 9)
+
+  if (!rawBucket && !psa10 && !psa9) return null
+
+  const amount = (b: { itemOnlyMedianGbp: number; deliveredMedianGbp: number }) =>
+    showDelivered ? b.deliveredMedianGbp : b.itemOnlyMedianGbp
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 px-4 py-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Market price</span>
+        <button
+          type="button"
+          onClick={() => setShowDelivered((v) => !v)}
+          className="text-[10.5px] font-semibold text-accent"
+        >
+          {showDelivered ? 'Showing delivered' : 'Showing item only'}
+        </button>
+      </div>
+
+      {rawBucket && (
+        <div className="mt-2 flex items-baseline justify-between">
+          <span className="text-sm text-ink-soft">Raw · {rawBucket.condition ?? 'Unspecified'}</span>
+          <span className="text-lg font-semibold text-ink [font-variant-numeric:tabular-nums]">
+            £{amount(rawBucket).toFixed(2)}
+          </span>
+        </div>
+      )}
+
+      {(psa10 || psa9) && (
+        <div className="mt-2 flex items-center gap-4 border-t border-border pt-2">
+          {psa10 && (
+            <div>
+              <div className="text-xs text-ink-faint">PSA 10</div>
+              <div className="text-sm font-semibold text-ink [font-variant-numeric:tabular-nums]">£{amount(psa10).toFixed(2)}</div>
+            </div>
+          )}
+          {psa9 && (
+            <div>
+              <div className="text-xs text-ink-faint">PSA 9</div>
+              <div className="text-sm font-semibold text-ink [font-variant-numeric:tabular-nums]">£{amount(psa9).toFixed(2)}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {rawBucket && (
+        <div className="mt-2 text-[10.5px] text-ink-faint">
+          {rawBucket.sampleCount} sale{rawBucket.sampleCount === 1 ? '' : 's'} in the last {rawBucket.windowDays} days · as of{' '}
+          {new Date(rawBucket.lastSaleDate).toLocaleDateString()}
+        </div>
+      )}
+      {isStale(price.lastScrapedAt) && (
+        <div className="mt-1 text-[10.5px] text-accent">
+          {price.lastScrapedAt ? `Prices last checked ${new Date(price.lastScrapedAt).toLocaleDateString()} — may be out of date.` : 'Prices not yet checked for this card.'}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function SlotActionPanel({
   binderId,
   spreadIndex,
   slot,
+  price,
   onClose,
 }: {
   binderId: string
   spreadIndex: number
   slot: BinderSlot
+  price?: CardVariantPrice | null
   onClose: () => void
 }) {
   const [confirmingRemove, setConfirmingRemove] = useState(false)
@@ -51,6 +122,8 @@ export function SlotActionPanel({
             {slot.variantTypeName && <div className="mt-0.5 text-sm text-ink-faint">{slot.variantTypeName}</div>}
           </div>
         </div>
+
+        {price && <PriceSection price={price} slotCondition={slot.condition} />}
 
         <div>
           <button

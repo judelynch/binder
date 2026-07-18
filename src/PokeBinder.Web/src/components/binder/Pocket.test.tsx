@@ -17,6 +17,7 @@ const baseSlot: BinderSlot = {
     number: '4',
     rarity: 'Rare Holo',
   },
+  cardVariantId: 'variant-1',
   variantTypeName: 'Normal',
   owned: true,
   quantity: null,
@@ -24,10 +25,17 @@ const baseSlot: BinderSlot = {
   overlayTag: null,
 }
 
-function renderPocket(slot: BinderSlot, greyscaleEnabled: boolean) {
+function renderPocket(slot: BinderSlot, greyscaleEnabled: boolean, costToBuyGbp?: number | null) {
   return render(
     <DndContext onDragEnd={() => {}}>
-      <Pocket slot={slot} binderColourHex="#8B5FA6" greyscaleEnabled={greyscaleEnabled} overlaysEnabled={false} onOpen={vi.fn()} />
+      <Pocket
+        slot={slot}
+        binderColourHex="#8B5FA6"
+        greyscaleEnabled={greyscaleEnabled}
+        overlaysEnabled={false}
+        onOpen={vi.fn()}
+        costToBuyGbp={costToBuyGbp}
+      />
     </DndContext>,
   )
 }
@@ -54,5 +62,22 @@ describe('Pocket owned/greyscale rendering', () => {
   it('renders an empty slot as an add affordance', () => {
     renderPocket({ ...baseSlot, card: null, owned: false }, true)
     expect(screen.getByLabelText(/empty slot/i)).toBeInTheDocument()
+  })
+})
+
+describe('Pocket cost-to-buy badge', () => {
+  it('shows a cost-to-buy badge on a filled, unowned slot with a known price', () => {
+    renderPocket({ ...baseSlot, owned: false }, false, 8.5)
+    expect(screen.getByText('£8.50')).toBeInTheDocument()
+  })
+
+  it('omits the badge when the slot is owned, even with a known price', () => {
+    renderPocket({ ...baseSlot, owned: true }, false, 8.5)
+    expect(screen.queryByText('£8.50')).not.toBeInTheDocument()
+  })
+
+  it('omits the badge when no price is known', () => {
+    renderPocket({ ...baseSlot, owned: false }, false, null)
+    expect(screen.queryByText(/£/)).not.toBeInTheDocument()
   })
 })

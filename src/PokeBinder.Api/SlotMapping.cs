@@ -23,7 +23,7 @@ public static class SlotMapping
             : new OverlayTagDto(slot.OverlayTag.Id, slot.OverlayTag.Name, slot.OverlayTag.ColourHex);
 
         return new BinderSlotDto(
-            slot.Id, slot.Position, card, variantTypeName,
+            slot.Id, slot.Position, card, slot.CardVariantId, variantTypeName,
             slot.Owned, slot.Quantity, slot.Condition?.ToString(), overlayTag);
     }
 }

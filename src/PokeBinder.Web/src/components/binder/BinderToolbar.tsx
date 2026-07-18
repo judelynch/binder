@@ -27,6 +27,8 @@ export function BinderToolbar({
   visibleTagIds,
   onToggleTagVisibility,
   onResetTagVisibility,
+  ownedValueGbp,
+  missingCostGbp,
 }: {
   binderName: string
   completenessPercent: number
@@ -52,6 +54,8 @@ export function BinderToolbar({
   visibleTagIds: ReadonlySet<string> | null
   onToggleTagVisibility: (tagId: string) => void
   onResetTagVisibility: () => void
+  ownedValueGbp?: number | null
+  missingCostGbp?: number | null
 }) {
   const tagsAreFiltered = visibleTagIds !== null
 
@@ -68,6 +72,20 @@ export function BinderToolbar({
               {Math.round(completenessPercent)}%
             </span>
           </div>
+          {(ownedValueGbp != null || missingCostGbp != null) && (
+            <div className="hidden items-center gap-2.5 text-[11px] sm:flex">
+              {ownedValueGbp != null && (
+                <span className="text-good [font-variant-numeric:tabular-nums]">
+                  £{ownedValueGbp.toFixed(2)} <span className="text-ink-faint">owned</span>
+                </span>
+              )}
+              {missingCostGbp != null && (
+                <span className="text-ink-soft [font-variant-numeric:tabular-nums]">
+                  £{missingCostGbp.toFixed(2)} <span className="text-ink-faint">to complete</span>
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

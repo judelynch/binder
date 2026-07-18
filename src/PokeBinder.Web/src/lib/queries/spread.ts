@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import type { BinderPriceSummary } from '../pricing-types'
 import type { BinderSlot, SlotCondition, SlotSuggestions, Spread } from '../spread-types'
 import { bindersKey, dashboardKey } from './binders'
 
@@ -24,6 +25,17 @@ export function useSuggestions(binderId: string, spreadIndex: number) {
     queryKey: suggestionsKey(binderId, spreadIndex),
     queryFn: async () => (await api.get<SlotSuggestions[]>(`/binders/${binderId}/spread/${spreadIndex}/suggestions`)).data,
     enabled: spreadIndex >= 0,
+  })
+}
+
+export function pricesKey(binderId: string) {
+  return ['binder-prices', binderId] as const
+}
+
+export function usePrices(binderId: string) {
+  return useQuery({
+    queryKey: pricesKey(binderId),
+    queryFn: async () => (await api.get<BinderPriceSummary>(`/binders/${binderId}/prices`)).data,
   })
 }
 

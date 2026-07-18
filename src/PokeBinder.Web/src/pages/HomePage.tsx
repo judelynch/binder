@@ -33,9 +33,10 @@ export function HomePage() {
       </h1>
       <p className="mt-1 text-sm text-ink-soft">Here's where your collection stands today.</p>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         {isPending ? (
           <>
+            <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
@@ -49,6 +50,11 @@ export function HomePage() {
             <StatCard label="Cards missing" value={data.cardsMissing.toLocaleString()} sub="assigned, not owned" />
             <StatCard label="Binders" value={data.binderCount.toLocaleString()} />
             <StatCard label="Completeness" value={`${overallCompleteness}%`} sub="overall" accent />
+            <StatCard
+              label="Portfolio value"
+              value={data.portfolioValueGbp != null ? `£${data.portfolioValueGbp.toFixed(2)}` : '—'}
+              sub={data.portfolioValueGbp != null ? 'best-available price' : 'no price data yet'}
+            />
           </>
         )}
       </div>
@@ -78,6 +84,33 @@ export function HomePage() {
           </div>
         )}
       </div>
+
+      {data && data.topValuableCards.length > 0 && (
+        <>
+          <div className="mt-8 flex items-baseline justify-between">
+            <h2 className="font-display text-base font-semibold text-ink">Most valuable cards</h2>
+          </div>
+          <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+            {data.topValuableCards.map((card) => (
+              <div key={card.cardVariantId} className="w-32 shrink-0">
+                <div className="aspect-[5/7] overflow-hidden rounded-lg bg-surface-2">
+                  {card.imageSmallUrl && (
+                    <img src={card.imageSmallUrl} alt={card.cardName} loading="lazy" className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div className="mt-1.5 truncate text-xs font-semibold text-ink">{card.cardName}</div>
+                <div className="truncate text-[11px] text-ink-faint">
+                  {card.setName}
+                  {card.variantTypeName && card.variantTypeName !== 'Normal' ? ` · ${card.variantTypeName}` : ''}
+                </div>
+                <div className="text-xs font-semibold text-accent [font-variant-numeric:tabular-nums]">
+                  £{card.priceGbp.toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="mt-8 flex items-baseline justify-between">
         <h2 className="font-display text-base font-semibold text-ink">Sets in progress</h2>

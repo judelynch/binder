@@ -1,4 +1,5 @@
 import type { PanelSide } from '../../lib/panel-nav'
+import type { CardVariantPrice } from '../../lib/pricing-types'
 import type { BinderSlot, SlotSuggestions, SpreadPanel } from '../../lib/spread-types'
 import { Pocket } from './Pocket'
 
@@ -18,6 +19,7 @@ export function PagePanel({
   selectedSlotIds,
   onToggleSelect,
   isSlotDimmed,
+  priceByCardVariantId,
 }: {
   panel: SpreadPanel
   side: PanelSide
@@ -34,6 +36,7 @@ export function PagePanel({
   selectedSlotIds?: ReadonlySet<string>
   onToggleSelect?: (slot: BinderSlot) => void
   isSlotDimmed?: (slot: BinderSlot) => boolean
+  priceByCardVariantId?: Map<string, CardVariantPrice>
 }) {
   if (panel.type === 'cover') {
     return (
@@ -78,6 +81,7 @@ export function PagePanel({
             selected={selectedSlotIds?.has(slot.slotId)}
             onToggleSelect={onToggleSelect ? () => onToggleSelect(slot) : undefined}
             dimmed={isSlotDimmed ? isSlotDimmed(slot) : false}
+            costToBuyGbp={slot.cardVariantId ? priceByCardVariantId?.get(slot.cardVariantId)?.bestAvailableItemOnlyGbp : undefined}
           />
         ))}
       </div>

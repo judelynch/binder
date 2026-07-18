@@ -21,11 +21,24 @@ export interface DashboardBinder {
   lastAccessedAt: string | null
 }
 
+export interface DashboardValuableCard {
+  cardVariantId: string
+  cardId: string
+  cardName: string
+  imageSmallUrl: string | null
+  setName: string
+  number: string
+  variantTypeName: string | null
+  priceGbp: number
+}
+
 export interface Dashboard {
   cardsOwned: number
   cardsMissing: number
   binderCount: number
   recentBinders: DashboardBinder[]
+  portfolioValueGbp: number | null
+  topValuableCards: DashboardValuableCard[]
 }
 
 export interface CreateBinderInput {

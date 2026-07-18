@@ -18,6 +18,7 @@ export function Pocket({
   selected,
   onToggleSelect,
   dimmed,
+  costToBuyGbp,
 }: {
   slot: BinderSlot
   binderColourHex: string
@@ -32,6 +33,7 @@ export function Pocket({
   selected?: boolean
   onToggleSelect?: () => void
   dimmed?: boolean
+  costToBuyGbp?: number | null
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: slot.slotId,
@@ -156,6 +158,15 @@ export function Pocket({
         >
           <LightbulbIcon className="h-3 w-3" />
         </button>
+      )}
+
+      {!isEmpty && !slot.owned && !selectMode && costToBuyGbp != null && (
+        <span
+          title="Cheapest available price to buy this card"
+          className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/65 px-1 py-0.5 text-[9px] font-bold text-white shadow ring-1 ring-black/40 [font-variant-numeric:tabular-nums]"
+        >
+          £{costToBuyGbp.toFixed(2)}
+        </span>
       )}
     </div>
   )
