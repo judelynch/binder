@@ -17,10 +17,12 @@ export function ResultsGrid({
   results,
   selectedIds,
   onToggleSelect,
+  onOpenCard,
 }: {
   results: CardSearchResult[]
   selectedIds: ReadonlySet<string>
   onToggleSelect: (variantId: string) => void
+  onOpenCard?: (cardId: string) => void
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const columns = useColumnCount()
@@ -73,6 +75,7 @@ export function ResultsGrid({
                     variant={{ id: item.variantId, variantTypeName: item.variantTypeName }}
                     selected={selectedIds.has(item.variantId)}
                     onToggleSelect={() => onToggleSelect(item.variantId)}
+                    onOpenDetail={onOpenCard ? () => onOpenCard(item.card.id) : undefined}
                   />
                 ))}
               </div>

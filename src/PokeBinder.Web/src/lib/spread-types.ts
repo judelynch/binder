@@ -43,7 +43,7 @@ export interface Spread {
   totalSpreads: number
 }
 
-export type SuggestionReason = 'NextInSet' | 'NextRelease' | 'SameThemeRarity'
+export type SuggestionReason = 'NextInSet' | 'PrevInSet' | 'NextRelease' | 'SameThemeRarity'
 
 export interface SuggestedCard {
   cardId: string
@@ -60,4 +60,11 @@ export interface SuggestedCard {
 export interface SlotSuggestions {
   slotId: string
   suggestions: SuggestedCard[]
+}
+
+/** SlotSuggestions remapped from its source (filled) slot onto the nearest following empty slot -
+ * see BinderDetailPage's emptySlotSuggestions - plus the filled card's name for the "Based on X"
+ * framing in the modal, since an empty slot itself has no card to read that from. */
+export interface EmptySlotSuggestions extends SlotSuggestions {
+  basedOnCardName: string
 }

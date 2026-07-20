@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { CheckboxChips } from '../components/search/CheckboxChips'
 import { FilterGroup } from '../components/search/FilterGroup'
 import { RadioChips } from '../components/search/RadioChips'
@@ -7,7 +7,7 @@ import { OwnershipSelectionToolbar } from '../components/collection/OwnershipSel
 import { SetCardsGrid } from '../components/collection/SetCardsGrid'
 import { Skeleton } from '../components/Skeleton'
 import { SetLogo } from '../components/sets/SetLogo'
-import { useFullSetCards, useSets } from '../lib/queries/cards'
+import { useFullSetCards, useSetPrices, useSets } from '../lib/queries/cards'
 import { useBulkSetOwnership } from '../lib/queries/collection'
 import { computeSetCompletion, isCardComplete } from '../lib/setCompletion'
 import { toggleSelection } from '../lib/selection'
@@ -16,9 +16,19 @@ const OWNERSHIP_OPTIONS = ['Complete', 'Incomplete'] as const
 
 export function SetDetailPage() {
   const { setId } = useParams<{ setId: string }>()
+  const navigate = useNavigate()
   const { data: sets } = useSets()
   const { data: page, isPending, isError } = useFullSetCards(setId ?? null)
+  const { data: prices } = useSetPrices(setId ?? null)
   const bulkSetOwnership = useBulkSetOwnership()
+
+  const priceByVariantId = useMemo(() => {
+    const map = new Map<string, number>()
+    prices?.forEach((p) => {
+      if (p.bestAvailableItemOnlyGbp != null) map.set(p.cardVariantId, p.bestAvailableItemOnlyGbp)
+    })
+    return map
+  }, [prices])
 
   const [rarities, setRarities] = useState<string[]>([])
   const [variantTypes, setVariantTypes] = useState<string[]>([])
@@ -114,7 +124,13 @@ export function SetDetailPage() {
             ) : visibleCards.length === 0 ? (
               <p className="p-4 text-sm text-ink-faint">No cards match these filters.</p>
             ) : (
-              <SetCardsGrid cards={visibleCards} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+              <SetCardsGrid
+                cards={visibleCards}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onOpenCard={(cardId) => navigate(`/cards/${cardId}`)}
+                priceByVariantId={priceByVariantId}
+              />
             )}
           </div>
 

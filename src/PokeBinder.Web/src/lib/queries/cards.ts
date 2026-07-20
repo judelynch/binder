@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
+import type { CardVariantPrice, PriceHistoryPoint } from '../pricing-types'
 
 export interface SetSummary {
   id: string
@@ -123,5 +124,29 @@ export function useFullSetCards(setId: string | null) {
     queryKey: ['set-cards-full', setId],
     queryFn: async () => (await api.get<PagedResult<CardSummary>>(`/sets/${setId}/cards`, { params: { pageSize: 500 } })).data,
     enabled: setId !== null,
+  })
+}
+
+export function useSetPrices(setId: string | null) {
+  return useQuery({
+    queryKey: ['set-prices', setId],
+    queryFn: async () => (await api.get<CardVariantPrice[]>(`/sets/${setId}/prices`)).data,
+    enabled: setId !== null,
+  })
+}
+
+export function useCardPrices(cardId: string | null) {
+  return useQuery({
+    queryKey: ['card-prices', cardId],
+    queryFn: async () => (await api.get<CardVariantPrice[]>(`/cards/${cardId}/prices`)).data,
+    enabled: cardId !== null,
+  })
+}
+
+export function useVariantPriceHistory(cardId: string | null, variantId: string | null) {
+  return useQuery({
+    queryKey: ['variant-price-history', cardId, variantId],
+    queryFn: async () => (await api.get<PriceHistoryPoint[]>(`/cards/${cardId}/variants/${variantId}/price-history`)).data,
+    enabled: cardId !== null && variantId !== null,
   })
 }

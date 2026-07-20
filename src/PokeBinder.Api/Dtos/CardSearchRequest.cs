@@ -20,6 +20,11 @@ public class CardSearchRequest
     public int? NationalPokedexNumber { get; set; }
     public string[]? VariantTypes { get; set; }
 
+    /// <summary>True = only cards with at least one priced variant. Ignored (not "false = only unpriced") since that's rarely what anyone wants to filter for.</summary>
+    public bool? HasPriceData { get; set; }
+    public decimal? PriceMin { get; set; }
+    public decimal? PriceMax { get; set; }
+
     /// <summary>setNumber (default) | name | releaseDate | rarity</summary>
     public string Sort { get; set; } = "setNumber";
 

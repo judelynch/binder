@@ -81,3 +81,56 @@ describe('Pocket cost-to-buy badge', () => {
     expect(screen.queryByText(/£/)).not.toBeInTheDocument()
   })
 })
+
+describe('Pocket suggestion lightbulb', () => {
+  it('shows the lightbulb on an empty slot with suggestions', () => {
+    render(
+      <DndContext onDragEnd={() => {}}>
+        <Pocket
+          slot={{ ...baseSlot, card: null, cardVariantId: null, owned: false }}
+          binderColourHex="#8B5FA6"
+          greyscaleEnabled={false}
+          overlaysEnabled={false}
+          onOpen={vi.fn()}
+          hasSuggestions
+          onOpenSuggestions={vi.fn()}
+        />
+      </DndContext>,
+    )
+    expect(screen.getByLabelText(/suggested card available/i)).toBeInTheDocument()
+  })
+
+  it('never shows the lightbulb on a filled slot, even if hasSuggestions is true', () => {
+    render(
+      <DndContext onDragEnd={() => {}}>
+        <Pocket
+          slot={baseSlot}
+          binderColourHex="#8B5FA6"
+          greyscaleEnabled={false}
+          overlaysEnabled={false}
+          onOpen={vi.fn()}
+          hasSuggestions
+          onOpenSuggestions={vi.fn()}
+        />
+      </DndContext>,
+    )
+    expect(screen.queryByLabelText(/suggested card available/i)).not.toBeInTheDocument()
+  })
+
+  it('omits the lightbulb on an empty slot with no suggestions', () => {
+    render(
+      <DndContext onDragEnd={() => {}}>
+        <Pocket
+          slot={{ ...baseSlot, card: null, cardVariantId: null, owned: false }}
+          binderColourHex="#8B5FA6"
+          greyscaleEnabled={false}
+          overlaysEnabled={false}
+          onOpen={vi.fn()}
+          hasSuggestions={false}
+          onOpenSuggestions={vi.fn()}
+        />
+      </DndContext>,
+    )
+    expect(screen.queryByLabelText(/suggested card available/i)).not.toBeInTheDocument()
+  })
+})

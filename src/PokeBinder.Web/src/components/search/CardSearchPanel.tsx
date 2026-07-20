@@ -10,9 +10,11 @@ import { SelectionToolbar } from './SelectionToolbar'
 export function CardSearchPanel({
   defaultBinderId,
   defaultStartSlotId,
+  onOpenCard,
 }: {
   defaultBinderId?: string
   defaultStartSlotId?: string
+  onOpenCard?: (cardId: string) => void
 }) {
   const [filters, setFilters] = useState<CardSearchFilters>(EMPTY_FILTERS)
   const [page, setPage] = useState(1)
@@ -108,7 +110,7 @@ export function CardSearchPanel({
           {search.isPending ? (
             <p className="p-4 text-sm text-ink-faint">Searching…</p>
           ) : search.data && search.data.items.length > 0 ? (
-            <ResultsGrid results={search.data.items} selectedIds={selectedIds} onToggleSelect={toggleVariant} />
+            <ResultsGrid results={search.data.items} selectedIds={selectedIds} onToggleSelect={toggleVariant} onOpenCard={onOpenCard} />
           ) : (
             <p className="p-4 text-sm text-ink-faint">No cards match these filters.</p>
           )}

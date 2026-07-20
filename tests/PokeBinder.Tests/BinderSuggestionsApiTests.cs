@@ -41,8 +41,7 @@ public class BinderSuggestionsApiTests : IAsyncLifetime
         await _factory.DisposeAsync();
     }
 
-    [Fact]
-    public async Task GetSuggestions_ReturnsNextInSetNextReleaseAndThemeSuggestions()
+    private async Task<(Guid BinderId, IReadOnlyList<Guid> SlotIds)> CreateBinderWithSlotsAsync(int count = 4)
     {
         var createBinder = await _client.PostAsJsonAsync("/api/binders", new { name = "Suggestion Binder", colourHex = "#336699", rows = 3, columns = 3, initialPageCount = 2 });
         createBinder.EnsureSuccessStatusCode();
@@ -51,46 +50,92 @@ public class BinderSuggestionsApiTests : IAsyncLifetime
         var spreadResponse = await _client.GetAsync($"/api/binders/{binder.Id}/spread/0");
         spreadResponse.EnsureSuccessStatusCode();
         var spread = (await spreadResponse.Content.ReadFromJsonAsync<SpreadResponseDto>())!;
-        var slots = spread.RightPanel.Slots!;
+        return (binder.Id, spread.RightPanel.Slots!.Take(count).Select(s => s.SlotId).ToList());
+    }
 
-        // Place Gengar (set1) and Oddish (set1, Illustration Rare/Grass) into the first two slots.
-        var gengarSlotId = slots[0].SlotId;
-        var oddishSlotId = slots[1].SlotId;
+    private async Task AssignAsync(Guid binderId, Guid slotId, string cardId) =>
+        (await _client.PutAsJsonAsync($"/api/binders/{binderId}/slots/{slotId}", new { cardVariantId = _variantIds[cardId] })).EnsureSuccessStatusCode();
 
-        var assignGengar = await _client.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{gengarSlotId}", new { cardVariantId = _variantIds[SuggestionCardFixture.GengarSet1] });
-        assignGengar.EnsureSuccessStatusCode();
-        var assignOddish = await _client.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{oddishSlotId}", new { cardVariantId = _variantIds[SuggestionCardFixture.OddishSet1] });
-        assignOddish.EnsureSuccessStatusCode();
+    private async Task<List<SlotSuggestionsDto>> GetSuggestionsAsync(Guid binderId)
+    {
+        var response = await _client.GetAsync($"/api/binders/{binderId}/spread/0/suggestions");
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<List<SlotSuggestionsDto>>())!;
+    }
 
-        var suggestionsResponse = await _client.GetAsync($"/api/binders/{binder.Id}/spread/0/suggestions");
-        suggestionsResponse.EnsureSuccessStatusCode();
-        var suggestions = (await suggestionsResponse.Content.ReadFromJsonAsync<List<SlotSuggestionsDto>>())!;
+    [Fact]
+    public async Task SetTheme_TwoCardsFromTheSameSet_SuggestsTheGapBetweenThemFromBothSides()
+    {
+        // Gengar (#1) and Oddish (#3) share a set and nothing else, so the Set theme wins; the
+        // missing Haunter (#2) between them should be suggested from both directions.
+        var (binderId, slots) = await CreateBinderWithSlotsAsync();
+        await AssignAsync(binderId, slots[0], SuggestionCardFixture.GengarSet1);
+        await AssignAsync(binderId, slots[1], SuggestionCardFixture.OddishSet1);
 
-        var gengarSuggestions = suggestions.Single(s => s.SlotId == gengarSlotId).Suggestions;
-        Assert.Equal(2, gengarSuggestions.Count);
-        Assert.Contains(gengarSuggestions, s => s.CardId == SuggestionCardFixture.HaunterSet1 && s.Reason == "NextInSet");
-        Assert.Contains(gengarSuggestions, s => s.CardId == SuggestionCardFixture.GengarSet2 && s.Reason == "NextRelease");
+        var suggestions = await GetSuggestionsAsync(binderId);
 
-        var oddishSuggestions = suggestions.Single(s => s.SlotId == oddishSlotId).Suggestions;
-        var themeSuggestion = Assert.Single(oddishSuggestions);
-        Assert.Equal(SuggestionCardFixture.TangelaSet2, themeSuggestion.CardId);
-        Assert.Equal("SameThemeRarity", themeSuggestion.Reason);
-        Assert.Equal("Suggestion Set Two", themeSuggestion.SetName);
-        Assert.NotEqual(Guid.Empty, themeSuggestion.CardVariantId);
+        var gengarSuggestions = suggestions.Single(s => s.SlotId == slots[0]).Suggestions;
+        var gengarSuggestion = Assert.Single(gengarSuggestions);
+        Assert.Equal(SuggestionCardFixture.HaunterSet1, gengarSuggestion.CardId);
+        Assert.Equal("NextInSet", gengarSuggestion.Reason);
+
+        var oddishSuggestions = suggestions.Single(s => s.SlotId == slots[1]).Suggestions;
+        var oddishSuggestion = Assert.Single(oddishSuggestions);
+        Assert.Equal(SuggestionCardFixture.HaunterSet1, oddishSuggestion.CardId);
+        Assert.Equal("PrevInSet", oddishSuggestion.Reason);
+        Assert.Equal("Suggestion Set One", oddishSuggestion.SetName);
+        Assert.NotEqual(Guid.Empty, oddishSuggestion.CardVariantId);
+    }
+
+    [Fact]
+    public async Task NameTheme_TwoGengarsFromDifferentSets_SuggestsTheNextPrintForBoth()
+    {
+        // Gengar (set1) and Gengar (set2) share neither a set nor a rarity+type/rarity+supertype
+        // group as large as their shared name, so the Name theme wins.
+        var (binderId, slots) = await CreateBinderWithSlotsAsync();
+        await AssignAsync(binderId, slots[0], SuggestionCardFixture.GengarSet1);
+        await AssignAsync(binderId, slots[1], SuggestionCardFixture.GengarSet2);
+
+        var suggestions = await GetSuggestionsAsync(binderId);
+
+        foreach (var slotId in new[] { slots[0], slots[1] })
+        {
+            var slotSuggestions = suggestions.Single(s => s.SlotId == slotId).Suggestions;
+            var suggestion = Assert.Single(slotSuggestions);
+            Assert.Equal(SuggestionCardFixture.GengarSet3, suggestion.CardId);
+            Assert.Equal("NextRelease", suggestion.Reason);
+        }
+    }
+
+    [Fact]
+    public async Task RaritySupertypeTheme_TwoUltraRareTrainers_SuggestsAnotherOne()
+    {
+        // Bill and Oak are both Ultra Rare Trainers in their own separate sets, with no shared name
+        // and no element type at all (Trainers aren't Pokémon) - RaritySupertype is the only
+        // category with a group bigger than 1, so it wins.
+        var (binderId, slots) = await CreateBinderWithSlotsAsync();
+        await AssignAsync(binderId, slots[0], SuggestionCardFixture.TrainerBill);
+        await AssignAsync(binderId, slots[1], SuggestionCardFixture.TrainerOak);
+
+        var suggestions = await GetSuggestionsAsync(binderId);
+
+        foreach (var slotId in new[] { slots[0], slots[1] })
+        {
+            var slotSuggestions = suggestions.Single(s => s.SlotId == slotId).Suggestions;
+            var suggestion = Assert.Single(slotSuggestions);
+            Assert.Equal(SuggestionCardFixture.TrainerMarnie, suggestion.CardId);
+            Assert.Equal("SameThemeRarity", suggestion.Reason);
+        }
     }
 
     [Fact]
     public async Task GetSuggestions_EmptyBinder_ReturnsNoSuggestions()
     {
-        var createBinder = await _client.PostAsJsonAsync("/api/binders", new { name = "Empty Binder", colourHex = "#336699", rows = 3, columns = 3, initialPageCount = 2 });
-        createBinder.EnsureSuccessStatusCode();
-        var binder = (await createBinder.Content.ReadFromJsonAsync<BinderSummaryDto>())!;
+        var (binderId, _) = await CreateBinderWithSlotsAsync();
 
-        var response = await _client.GetAsync($"/api/binders/{binder.Id}/spread/0/suggestions");
-        response.EnsureSuccessStatusCode();
-        var suggestions = await response.Content.ReadFromJsonAsync<List<SlotSuggestionsDto>>();
+        var suggestions = await GetSuggestionsAsync(binderId);
 
-        Assert.Empty(suggestions!);
+        Assert.Empty(suggestions);
     }
 
     private record TokenOnly(string Token);

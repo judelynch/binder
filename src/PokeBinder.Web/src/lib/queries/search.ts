@@ -30,6 +30,9 @@ function buildParams(filters: CardSearchFilters, page: number, pageSize: number)
   if (filters.regulationMarks.length) params.regulationMarks = filters.regulationMarks
   if (filters.nationalPokedexNumber !== null) params.nationalPokedexNumber = filters.nationalPokedexNumber
   if (filters.variantTypes.length) params.variantTypes = filters.variantTypes
+  if (filters.hasPriceData) params.hasPriceData = true
+  if (filters.priceMin !== null) params.priceMin = filters.priceMin
+  if (filters.priceMax !== null) params.priceMax = filters.priceMax
 
   return params
 }

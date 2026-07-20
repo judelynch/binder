@@ -25,6 +25,20 @@ export interface BinderPriceSummary {
   prices: CardVariantPrice[]
 }
 
+export interface PriceHistoryPoint {
+  soldDate: string
+  title: string
+  itemPriceGbp: number
+  postagePriceGbp: number | null
+  deliveredPriceGbp: number
+  listingFormat: 'Auction' | 'BuyItNow' | 'BestOfferAccepted'
+  thumbnailUrl: string | null
+  gradedStatus: 'Raw' | 'Graded'
+  grader: string | null
+  grade: number | null
+  rawCondition: 'Unspecified' | 'NM' | 'LP' | 'MP' | 'HP' | 'DMG'
+}
+
 const STALENESS_DAYS = 7
 
 /** Prefers the freshest window (30 over 60 over 90) among buckets matching a predicate. */

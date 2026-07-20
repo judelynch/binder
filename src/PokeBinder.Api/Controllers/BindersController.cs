@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PokeBinder.Api.Dtos;
+using PokeBinder.Api.Pricing;
 using PokeBinder.Core.Binders;
 using PokeBinder.Core.Cards;
 using PokeBinder.Core.Pricing;
@@ -304,6 +305,7 @@ public class BindersController : ControllerBase
                 CardId = s.CardVariant!.Card!.Id,
                 s.CardVariant.Card.Name,
                 s.CardVariant.Card.SetId,
+                s.CardVariant.Card.Supertype,
                 ReleaseDate = s.CardVariant.Card.Set!.ReleaseDate,
                 s.CardVariant.Card.NumberSortGroup,
                 s.CardVariant.Card.NumberSortPrefix,
@@ -321,7 +323,7 @@ public class BindersController : ControllerBase
 
         var placedCards = placedRaw
             .Select(p => new PlacedCard(
-                p.Id, p.CardId, p.Name, p.SetId, p.ReleaseDate,
+                p.Id, p.CardId, p.Name, p.SetId, p.Supertype, p.ReleaseDate,
                 new SortKey(p.NumberSortGroup, p.NumberSortPrefix, p.NumberSortValue, p.NumberSortSuffix),
                 p.Rarity, p.Types))
             .ToList();
@@ -364,7 +366,31 @@ public class BindersController : ControllerBase
             }
         }
 
-        var suggestionsBySlot = SuggestionEngine.ComputeSuggestions(placedCards, setCatalog, nameCatalog, themeCatalog);
+        var raritySupertypeKeys = placedCards
+            .Where(p => p.Rarity != null)
+            .Select(p => new RaritySupertypeKey(p.Rarity!, p.Supertype))
+            .Distinct()
+            .ToList();
+
+        var raritySupertypeCatalog = new Dictionary<RaritySupertypeKey, IReadOnlyList<CatalogCard>>();
+        if (raritySupertypeKeys.Count > 0)
+        {
+            var rarities = raritySupertypeKeys.Select(k => k.Rarity).Distinct().ToList();
+            var supertypes = raritySupertypeKeys.Select(k => k.Supertype).Distinct().ToList();
+            var candidates = (await ProjectCatalogRows(
+                    _db.Cards.Where(c => c.Rarity != null && rarities.Contains(c.Rarity) && supertypes.Contains(c.Supertype)),
+                    normalVariantTypeId)
+                .ToListAsync(ct))
+                .Select(ToCatalogCard)
+                .ToList();
+
+            foreach (var key in raritySupertypeKeys)
+            {
+                raritySupertypeCatalog[key] = candidates.Where(c => c.Rarity == key.Rarity && c.Supertype == key.Supertype).ToList();
+            }
+        }
+
+        var suggestionsBySlot = SuggestionEngine.ComputeSuggestions(placedCards, setCatalog, nameCatalog, themeCatalog, raritySupertypeCatalog);
 
         var slotPageLookup = placedRaw.ToDictionary(p => p.Id, p => p.PageNumber);
         var relevantSuggestions = suggestionsBySlot
@@ -433,7 +459,7 @@ public class BindersController : ControllerBase
 
         var prices = pricePoints
             .GroupBy(p => p.CardVariantId)
-            .Select(g => ToCardVariantPriceDto(g.Key, g.ToList(), scrapedAtByVariant.GetValueOrDefault(g.Key)))
+            .Select(g => CardVariantPriceMapping.ToDto(g.Key, g.ToList(), scrapedAtByVariant.GetValueOrDefault(g.Key)))
             .ToList();
         var bestAvailableByVariant = prices.ToDictionary(p => p.CardVariantId, p => p.BestAvailableItemOnlyGbp);
 
@@ -459,43 +485,20 @@ public class BindersController : ControllerBase
         return Ok(new BinderPriceSummaryDto(ownedValue, missingCost, prices));
     }
 
-    private static CardVariantPriceDto ToCardVariantPriceDto(Guid cardVariantId, List<PricePoint> points, DateTime? lastScrapedAt)
-    {
-        PriceBucketDto ToBucket(PricePoint p) => new(
-            p.GradedStatus.ToString(), p.Grader, p.Grade, p.Condition?.ToString(),
-            p.WindowDays, p.ItemOnlyMedianGbp, p.DeliveredMedianGbp, p.SampleCount, p.LastSaleDate);
-
-        var rawPoints = points.Where(p => p.GradedStatus == GradedStatus.Raw).ToList();
-        var rawBuckets = rawPoints.OrderBy(p => p.Condition).ThenBy(p => p.WindowDays).Select(ToBucket).ToList();
-        var gradedBuckets = points.Where(p => p.GradedStatus == GradedStatus.Graded)
-            .OrderBy(p => p.Grader).ThenByDescending(p => p.Grade).ThenBy(p => p.WindowDays)
-            .Select(ToBucket).ToList();
-
-        var cheapestRaw = rawPoints.OrderBy(p => p.ItemOnlyMedianGbp).FirstOrDefault();
-
-        return new CardVariantPriceDto(
-            cardVariantId,
-            cheapestRaw?.ItemOnlyMedianGbp,
-            cheapestRaw?.DeliveredMedianGbp,
-            rawBuckets,
-            gradedBuckets,
-            lastScrapedAt);
-    }
-
     private record CardCatalogRow(
-        string Id, string Name, string SetId, DateOnly ReleaseDate,
+        string Id, string Name, string SetId, string Supertype, DateOnly ReleaseDate,
         byte NumberSortGroup, string NumberSortPrefix, int NumberSortValue, string NumberSortSuffix,
         string? Rarity, IReadOnlyList<string> Types, Guid DefaultVariantId);
 
     private static IQueryable<CardCatalogRow> ProjectCatalogRows(IQueryable<Card> query, Guid normalVariantTypeId) =>
         query.Select(c => new CardCatalogRow(
-            c.Id, c.Name, c.SetId, c.Set!.ReleaseDate,
+            c.Id, c.Name, c.SetId, c.Supertype, c.Set!.ReleaseDate,
             c.NumberSortGroup, c.NumberSortPrefix, c.NumberSortValue, c.NumberSortSuffix,
             c.Rarity, c.Types,
             c.Variants.Where(v => v.VariantTypeId == normalVariantTypeId).Select(v => v.Id).FirstOrDefault()));
 
     private static CatalogCard ToCatalogCard(CardCatalogRow r) =>
-        new(r.Id, r.Name, r.SetId, r.ReleaseDate, new SortKey(r.NumberSortGroup, r.NumberSortPrefix, r.NumberSortValue, r.NumberSortSuffix), r.Rarity, r.Types, r.DefaultVariantId);
+        new(r.Id, r.Name, r.SetId, r.Supertype, r.ReleaseDate, new SortKey(r.NumberSortGroup, r.NumberSortPrefix, r.NumberSortValue, r.NumberSortSuffix), r.Rarity, r.Types, r.DefaultVariantId);
 
     private async Task<SpreadPanelDto> BuildPanelAsync(Guid binderId, SpreadPanel panel, CancellationToken ct)
     {

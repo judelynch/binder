@@ -5,19 +5,22 @@ import type { BinderSlot, SuggestedCard, SuggestionReason } from '../../lib/spre
 
 const REASON_LABELS: Record<SuggestionReason, string> = {
   NextInSet: 'Next card in this set',
+  PrevInSet: 'Previous card in this set',
   NextRelease: `Next release of this card's Pokémon`,
-  SameThemeRarity: 'Matches this rarity + type combo',
+  SameThemeRarity: 'Matches this binder’s theme',
 }
 
 export function SuggestionModal({
   slot,
   suggestions,
+  basedOnCardName,
   binderId,
   spreadIndex,
   onClose,
 }: {
   slot: BinderSlot
   suggestions: SuggestedCard[]
+  basedOnCardName: string
   binderId: string
   spreadIndex: number
   onClose: () => void
@@ -27,7 +30,7 @@ export function SuggestionModal({
   return (
     <Modal title="Suggested cards" onClose={onClose}>
       <p className="mb-3 text-xs text-ink-soft">
-        Based on <span className="font-semibold text-ink">{slot.card?.name}</span> in this slot.
+        Based on <span className="font-semibold text-ink">{basedOnCardName}</span> nearby.
       </p>
       <div className="space-y-3">
         {suggestions.map((card) => (

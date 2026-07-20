@@ -63,3 +63,20 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Fill bar for the binder's drag-to-turn-page edge zones — see BinderFrame.tsx. Timed to match
+   EDGE_HOLD_MS exactly, so the bar finishing filling is what the page-turn is timed against. */
+@keyframes edge-page-turn-progress {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+.edge-page-turn-progress {
+  animation: edge-page-turn-progress 650ms linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-page-turn-progress {
+    animation-duration: 1ms;
+  }
+}

@@ -20,6 +20,9 @@ export interface CardSearchFilters {
   regulationMarks: string[]
   nationalPokedexNumber: number | null
   variantTypes: string[]
+  hasPriceData: boolean
+  priceMin: number | null
+  priceMax: number | null
   sort: SortOption
   sortDescending: boolean
 }
@@ -42,6 +45,9 @@ export const EMPTY_FILTERS: CardSearchFilters = {
   regulationMarks: [],
   nationalPokedexNumber: null,
   variantTypes: [],
+  hasPriceData: false,
+  priceMin: null,
+  priceMax: null,
   sort: 'setNumber',
   sortDescending: true,
 }
@@ -119,6 +125,16 @@ export function describeActiveFilters(filters: CardSearchFilters): ActiveFilterC
   }
   if (filters.nationalPokedexNumber !== null) {
     chips.push({ key: 'pokedex', label: `Pokédex #${filters.nationalPokedexNumber}`, clear: (f) => ({ ...f, nationalPokedexNumber: null }) })
+  }
+  if (filters.hasPriceData) {
+    chips.push({ key: 'has-price', label: 'Has price data', clear: (f) => ({ ...f, hasPriceData: false }) })
+  }
+  if (filters.priceMin !== null || filters.priceMax !== null) {
+    chips.push({
+      key: 'price',
+      label: `£${filters.priceMin ?? 0}–${filters.priceMax ?? '∞'}`,
+      clear: (f) => ({ ...f, priceMin: null, priceMax: null }),
+    })
   }
 
   return chips

@@ -6,6 +6,10 @@ import type { CardSummary } from '../../lib/queries/cards'
 import { useFullSetCards, useSets } from '../../lib/queries/cards'
 import { useBinders } from '../../lib/queries/binders'
 import { groupSetCards } from '../../lib/groupSetCards'
+import { isCardComplete } from '../../lib/setCompletion'
+
+const OWNERSHIP_QUICK_FILTERS = ['All', 'Have', 'Missing'] as const
+type OwnershipQuickFilter = (typeof OWNERSHIP_QUICK_FILTERS)[number]
 
 type PreviewResult = BulkAssignResult & { currentPageCount: number }
 
@@ -65,10 +69,26 @@ export function SetChecklistPanel({ defaultBinderId, onClose }: { defaultBinderI
   const [strategy, setStrategy] = useState<'skip' | 'overwrite'>('skip')
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [confirmed, setConfirmed] = useState<BulkAssignResult | null>(null)
+  const [ownershipQuickFilter, setOwnershipQuickFilter] = useState<OwnershipQuickFilter>('All')
   const queryClient = useQueryClient()
 
   const cards = setCardsPage?.items ?? []
   const groups = useMemo(() => groupSetCards(cards), [cards])
+
+  // A quick bulk-select, not a persistent filter mode: clicking "Have"/"Missing" sets excludedIds
+  // once based on each card's current completeness (same have/missing rule as the set detail
+  // page), same as the existing per-group "All"/"None" buttons - individual cards can still be
+  // toggled by hand afterward.
+  function applyOwnershipQuickFilter(filter: OwnershipQuickFilter) {
+    setOwnershipQuickFilter(filter)
+    if (filter === 'All') {
+      setExcludedIds(new Set())
+      return
+    }
+    const wantComplete = filter === 'Have'
+    setExcludedIds(new Set(cards.filter((c) => isCardComplete(c) !== wantComplete).map((c) => c.id)))
+    setPreview(null)
+  }
 
   function variantsFor(card: CardSummary): string[] {
     if (variantSelections[card.id]) return variantSelections[card.id]
@@ -196,6 +216,7 @@ export function SetChecklistPanel({ defaultBinderId, onClose }: { defaultBinderI
                   setExcludedIds(new Set())
                   setVariantSelections({})
                   setPreview(null)
+                  setOwnershipQuickFilter('All')
                 }}
                 className="w-full rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-ink"
               >
@@ -210,6 +231,25 @@ export function SetChecklistPanel({ defaultBinderId, onClose }: { defaultBinderI
                 <input type="checkbox" checked={allVariantsMode} onChange={toggleAllVariantsMode} className="h-3.5 w-3.5 accent-[var(--color-accent)]" />
                 Include all variants (master set) — otherwise just each card's default printing
               </label>
+
+              {setId && (
+                <div className="mt-2.5 flex items-center gap-1.5">
+                  <span className="text-[10.5px] font-semibold text-ink-soft">Select:</span>
+                  {OWNERSHIP_QUICK_FILTERS.map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => applyOwnershipQuickFilter(filter)}
+                      aria-pressed={ownershipQuickFilter === filter}
+                      className={`rounded-lg border px-2.5 py-1 text-[10.5px] font-semibold ${
+                        ownershipQuickFilter === filter ? 'border-accent text-accent' : 'border-border text-ink-soft'
+                      }`}
+                    >
+                      {filter === 'All' ? 'All cards' : filter === 'Have' ? 'Have only' : 'Missing only'}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {setId && (

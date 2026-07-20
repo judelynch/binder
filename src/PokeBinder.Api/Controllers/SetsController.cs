@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PokeBinder.Api.Dtos;
+using PokeBinder.Api.Pricing;
 using PokeBinder.Infrastructure;
 
 namespace PokeBinder.Api.Controllers;
@@ -115,5 +116,27 @@ public class SetsController : ControllerBase
             .ToList();
 
         return Ok(new PagedResult<CardSummaryDto>(items, page, pageSize, totalCount));
+    }
+
+    /// <summary>Best-available price for every variant of every card in this set, for the tile badges on the set page. Only variants with actual price data are returned (unlike the single-card endpoint) - a full set can have hundreds of unpriced variants and there's no per-tile need to distinguish "not priced yet" from "not in this response".</summary>
+    [HttpGet("{id}/prices")]
+    public async Task<ActionResult<IReadOnlyList<CardVariantPriceDto>>> GetSetPrices(string id, CancellationToken ct)
+    {
+        var variantIds = await _db.CardVariants.Where(v => v.Card!.SetId == id).Select(v => v.Id).ToListAsync(ct);
+        if (variantIds.Count == 0)
+        {
+            return Ok(Array.Empty<CardVariantPriceDto>());
+        }
+
+        var pricePoints = await _db.PricePoints
+            .Where(p => variantIds.Contains(p.CardVariantId) && p.QuarantinedReason == null && p.GradedStatus == Core.Pricing.GradedStatus.Raw)
+            .ToListAsync(ct);
+
+        var result = pricePoints
+            .GroupBy(p => p.CardVariantId)
+            .Select(g => CardVariantPriceMapping.ToDto(g.Key, g.ToList(), null))
+            .ToList();
+
+        return Ok(result);
     }
 }

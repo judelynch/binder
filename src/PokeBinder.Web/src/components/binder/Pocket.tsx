@@ -35,11 +35,15 @@ export function Pocket({
   dimmed?: boolean
   costToBuyGbp?: number | null
 }) {
+  // Draggable/droppable regardless of select mode - a plain click (no movement past dnd-kit's
+  // activation distance) still reaches onClick below, so drag and click-to-toggle-select coexist
+  // the same way drag and click-to-open already do outside select mode. This is what lets dragging
+  // a selected card move the whole multi-selection together (see BinderFrame's onDragEnd).
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: slot.slotId,
-    disabled: !slot.card || !!selectMode,
+    disabled: !slot.card,
   })
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: slot.slotId, disabled: !!selectMode })
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: slot.slotId })
 
   const setRefs = (node: HTMLElement | null) => {
     setDragRef(node)
@@ -56,8 +60,8 @@ export function Pocket({
         ref={setRefs}
         type="button"
         onClick={canSelect ? onToggleSelect : onOpen}
-        {...(canSelect ? {} : listeners)}
-        {...(canSelect ? {} : attributes)}
+        {...listeners}
+        {...attributes}
         style={{
           transform: CSS.Translate.toString(transform),
           opacity: isDragging ? 0.4 : 1,
@@ -145,7 +149,7 @@ export function Pocket({
         </button>
       )}
 
-      {!isEmpty && !selectMode && hasSuggestions && onOpenSuggestions && (
+      {isEmpty && !selectMode && hasSuggestions && onOpenSuggestions && (
         <button
           type="button"
           onClick={(e) => {

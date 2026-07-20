@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { resolveDragMove } from '../../lib/dnd'
 import type { PanelSide } from '../../lib/panel-nav'
 import type { CardVariantPrice } from '../../lib/pricing-types'
-import type { BinderSlot, SlotSuggestions, Spread } from '../../lib/spread-types'
+import type { BinderSlot, EmptySlotSuggestions, Spread } from '../../lib/spread-types'
 import { CardImage } from './CardImage'
 import { PagePanel } from './PagePanel'
 import { Spine } from './Spine'
@@ -21,6 +21,7 @@ export function BinderFrame({
   overlaysEnabled,
   onOpenSlot,
   onMoveSlot,
+  onBulkMoveSlots,
   suggestionsBySlot,
   onOpenSuggestions,
   onToggleOwned,
@@ -44,7 +45,8 @@ export function BinderFrame({
   overlaysEnabled: boolean
   onOpenSlot: (slot: BinderSlot) => void
   onMoveSlot: (sourceSlotId: string, targetSlotId: string) => void
-  suggestionsBySlot?: Map<string, SlotSuggestions>
+  onBulkMoveSlots?: (sourceSlotIds: string[], startSlotId: string) => void
+  suggestionsBySlot?: Map<string, EmptySlotSuggestions>
   onOpenSuggestions?: (slot: BinderSlot) => void
   onToggleOwned?: (slot: BinderSlot) => void
   onQuickRemove?: (slot: BinderSlot) => void
@@ -59,6 +61,10 @@ export function BinderFrame({
   priceByCardVariantId?: Map<string, CardVariantPrice>
 }) {
   const [activeSlot, setActiveSlot] = useState<BinderSlot | null>(null)
+  const [hoverEdge, setHoverEdge] = useState<'left' | 'right' | null>(null)
+  // Bumped every time an edge is (re-)armed, so the progress-bar div below can use it as a `key`
+  // to restart its fill animation from zero on each hold rather than continuing a stale one.
+  const [progressKey, setProgressKey] = useState(0)
 
   // Kept in refs (not state) so the pointermove listener below always reads the latest values
   // without needing to be torn down and re-attached on every render.
@@ -77,15 +83,29 @@ export function BinderFrame({
   function handleDragEnd(event: DragEndEvent) {
     setActiveSlot(null)
     const move = resolveDragMove(event)
-    if (move) onMoveSlot(move.sourceSlotId, move.targetSlotId)
+    if (!move) return
+
+    // Dragging a card that's part of the current multi-selection moves the whole selection
+    // together, dropped starting at wherever this one card landed. Dragging a card that ISN'T
+    // selected (even with select mode on) just moves that one card, same as normal.
+    if (selectMode && onBulkMoveSlots && selectedSlotIds?.has(move.sourceSlotId) && selectedSlotIds.size > 1) {
+      onBulkMoveSlots(Array.from(selectedSlotIds), move.targetSlotId)
+      return
+    }
+
+    onMoveSlot(move.sourceSlotId, move.targetSlotId)
   }
 
   // Dragging a card near the left/right edge of the viewport auto-advances the spread after a
-  // short hold, so a card on page 1 can be dragged all the way to page 10 without needing the
-  // target page to already be on screen. Uses a DragOverlay (below) so the dragged card's visual
-  // survives the source slot unmounting when the page turns underneath it.
+  // short hold, so a card on page 1 can be dragged all the way to page 16 without needing the
+  // target page to already be on screen — hold there and it keeps turning, one page per
+  // EDGE_HOLD_MS, until released, dropped, or the end of the binder. Uses a DragOverlay (below)
+  // so the dragged card's visual survives the source slot unmounting as pages turn underneath it.
   useEffect(() => {
-    if (!activeSlot) return
+    if (!activeSlot) {
+      setHoverEdge(null)
+      return
+    }
 
     let edgeTimer: number | null = null
     let armedEdge: 'left' | 'right' | null = null
@@ -96,6 +116,25 @@ export function BinderFrame({
         edgeTimer = null
       }
       armedEdge = null
+      setHoverEdge(null)
+    }
+
+    function armEdge(edge: 'left' | 'right') {
+      armedEdge = edge
+      setHoverEdge(edge)
+      setProgressKey((k) => k + 1)
+      edgeTimer = window.setTimeout(() => {
+        const nav = navRef.current
+        const canContinue = edge === 'left' ? nav.canGoPrev : nav.canGoNext
+        if (!canContinue) {
+          armedEdge = null
+          setHoverEdge(null)
+          return
+        }
+        if (edge === 'left') nav.onNavigatePrev?.()
+        else nav.onNavigateNext?.()
+        armEdge(edge) // still held - keep turning pages until released or the binder ends
+      }, EDGE_HOLD_MS)
     }
 
     function onPointerMove(e: PointerEvent) {
@@ -108,17 +147,9 @@ export function BinderFrame({
       }
       clearArmedEdge()
 
-      if (edge === null) {
-        return
+      if (edge !== null) {
+        armEdge(edge)
       }
-
-      armedEdge = edge
-      edgeTimer = window.setTimeout(() => {
-        const nav = navRef.current
-        if (edge === 'left' && nav.canGoPrev) nav.onNavigatePrev?.()
-        if (edge === 'right' && nav.canGoNext) nav.onNavigateNext?.()
-        armedEdge = null
-      }, EDGE_HOLD_MS)
     }
 
     window.addEventListener('pointermove', onPointerMove)
@@ -178,6 +209,48 @@ export function BinderFrame({
           </div>
         )}
       </DragOverlay>
+
+      {activeSlot && (
+        <>
+          <EdgeTurnPanel side="left" active={hoverEdge === 'left'} enabled={!!canGoPrev} progressKey={progressKey} />
+          <EdgeTurnPanel side="right" active={hoverEdge === 'right'} enabled={!!canGoNext} progressKey={progressKey} />
+        </>
+      )}
     </DndContext>
+  )
+}
+
+/** The visible drop-here-to-turn-pages strip shown along each edge of the viewport while a card is
+ * being dragged. Purely decorative/informational — pointer-events-none so it never interferes with
+ * dnd-kit's own hit-testing — the actual hold-to-turn logic lives in BinderFrame's pointermove effect. */
+function EdgeTurnPanel({
+  side,
+  active,
+  enabled,
+  progressKey,
+}: {
+  side: 'left' | 'right'
+  active: boolean
+  enabled: boolean
+  progressKey: number
+}) {
+  const sideClasses = side === 'left' ? 'left-0 border-r' : 'right-0 border-l'
+  return (
+    <div
+      className={`pointer-events-none fixed inset-y-0 z-50 flex w-14 flex-col items-center justify-center gap-3 ${sideClasses} transition-colors ${
+        active ? 'border-accent bg-accent/15' : 'border-border/60 bg-canvas/80'
+      } ${enabled ? '' : 'opacity-30'}`}
+    >
+      <span
+        className={`font-display text-3xl text-accent transition-transform ${
+          active ? (side === 'left' ? '-translate-x-1' : 'translate-x-1') : ''
+        }`}
+      >
+        {side === 'left' ? '‹' : '›'}
+      </span>
+      <div className="h-16 w-1 overflow-hidden rounded-full bg-border/60">
+        {active && <div key={progressKey} className="edge-page-turn-progress h-full w-full origin-bottom bg-accent" />}
+      </div>
+    </div>
   )
 }

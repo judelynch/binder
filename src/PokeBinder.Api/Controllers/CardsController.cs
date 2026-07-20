@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PokeBinder.Api.Cards;
 using PokeBinder.Api.Dtos;
+using PokeBinder.Api.Pricing;
 using PokeBinder.Core.Cards;
+using PokeBinder.Core.Pricing;
 using PokeBinder.Infrastructure;
 
 namespace PokeBinder.Api.Controllers;
@@ -33,6 +35,24 @@ public class CardsController : ControllerBase
         var pageSize = Math.Clamp(request.PageSize, 1, 500); // 500 = the select-all-results cap
 
         var query = _db.Cards.AsQueryable().ApplyFilters(request);
+
+        // Price filtering isn't part of the shared ApplyFilters (that's also used by admin bulk-assign,
+        // which has no reason to care about it) - a card matches on its BEST-AVAILABLE price (the
+        // cheapest published raw bucket across its variants), the same "best available" rule used
+        // everywhere else in the pricing UI, not "any bucket happens to fall in range".
+        if (request.HasPriceData == true || request.PriceMin.HasValue || request.PriceMax.HasValue)
+        {
+            var matchingVariantIds = await _db.PricePoints
+                .Where(p => p.GradedStatus == GradedStatus.Raw && p.QuarantinedReason == null)
+                .GroupBy(p => p.CardVariantId)
+                .Select(g => new { CardVariantId = g.Key, BestPrice = g.Min(p => p.ItemOnlyMedianGbp) })
+                .Where(x => !request.PriceMin.HasValue || x.BestPrice >= request.PriceMin)
+                .Where(x => !request.PriceMax.HasValue || x.BestPrice <= request.PriceMax)
+                .Select(x => x.CardVariantId)
+                .ToListAsync(ct);
+
+            query = query.Where(c => c.Variants.Any(v => matchingVariantIds.Contains(v.Id)));
+        }
 
         query = request.Sort switch
         {
@@ -157,5 +177,69 @@ public class CardsController : ControllerBase
             variants);
 
         return Ok(dto);
+    }
+
+    /// <summary>Best-available price + raw/graded buckets for every variant of this card, one entry per variant regardless of whether it has price data yet.</summary>
+    [HttpGet("{externalId}/prices")]
+    public async Task<ActionResult<IReadOnlyList<CardVariantPriceDto>>> GetCardPrices(string externalId, CancellationToken ct)
+    {
+        var variantIds = await _db.CardVariants.Where(v => v.CardId == externalId).Select(v => v.Id).ToListAsync(ct);
+        if (variantIds.Count == 0)
+        {
+            return NotFound();
+        }
+
+        var pricePoints = await _db.PricePoints
+            .Where(p => variantIds.Contains(p.CardVariantId) && p.QuarantinedReason == null)
+            .ToListAsync(ct);
+        var scrapedAtByVariant = await _db.CardVariantScrapeStates
+            .Where(s => variantIds.Contains(s.CardVariantId))
+            .ToDictionaryAsync(s => s.CardVariantId, s => s.LastScrapedAt, ct);
+
+        var byVariant = pricePoints.GroupBy(p => p.CardVariantId).ToDictionary(g => g.Key, g => g.ToList());
+
+        var result = variantIds
+            .Select(id => CardVariantPriceMapping.ToDto(id, byVariant.GetValueOrDefault(id) ?? new List<PricePoint>(), scrapedAtByVariant.GetValueOrDefault(id)))
+            .ToList();
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Every individual accepted sale for one variant, oldest first, with everything captured about
+    /// each listing - backs both the card detail page's trend chart and its full sale-history list.
+    /// Same eligibility rule as the aggregator (AutoAccepted, not a best-offer sale, English) so this
+    /// only ever shows sales that actually counted toward a price.
+    /// </summary>
+    [HttpGet("{externalId}/variants/{variantId:guid}/price-history")]
+    public async Task<ActionResult<IReadOnlyList<PriceHistoryPointDto>>> GetVariantPriceHistory(string externalId, Guid variantId, CancellationToken ct)
+    {
+        var variantExists = await _db.CardVariants.AnyAsync(v => v.Id == variantId && v.CardId == externalId, ct);
+        if (!variantExists)
+        {
+            return NotFound();
+        }
+
+        var history = await _db.ListingClassifications
+            .Where(c => c.ResolvedCardVariantId == variantId
+                && c.Status == ClassificationStatus.AutoAccepted
+                && !c.BestOfferAccepted
+                && c.Language == "English")
+            .OrderBy(c => c.RawListing!.SoldDate)
+            .Select(c => new PriceHistoryPointDto(
+                c.RawListing!.SoldDate,
+                c.RawListing.Title,
+                c.RawListing.ItemPriceGbp,
+                c.RawListing.PostagePriceGbp,
+                c.RawListing.ItemPriceGbp + (c.RawListing.PostagePriceGbp ?? 0m),
+                c.RawListing.ListingFormat.ToString(),
+                c.RawListing.ThumbnailUrl,
+                c.GradedStatus.ToString(),
+                c.Grader,
+                c.Grade,
+                c.RawCondition.ToString()))
+            .ToListAsync(ct);
+
+        return Ok(history);
     }
 }

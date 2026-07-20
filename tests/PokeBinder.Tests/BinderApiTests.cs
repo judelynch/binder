@@ -187,6 +187,129 @@ public class BinderApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BulkMove_MovesWholeSelectionToConsecutiveSlotsAcrossNonAdjacentPages()
+    {
+        var binder = await CreateBinderAsync(_clientA, rows: 2, columns: 2, initialPageCount: 6); // pages 1-6
+        var page1 = await GetSpreadAsync(_clientA, binder.Id, 0);
+        var slots = page1.RightPanel.Slots!;
+
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[0].SlotId}", new { cardVariantId = _cardVariantIds[0] });
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[1].SlotId}", new { cardVariantId = _cardVariantIds[1] });
+
+        var page3 = await GetSpreadAsync(_clientA, binder.Id, 1); // spread 1 = pages 2-3
+        var dropSlotId = page3.RightPanel.Slots![2].SlotId; // page 3, position 2
+
+        var response = await _clientA.PostAsJsonAsync($"/api/binders/{binder.Id}/slots/bulk-move", new
+        {
+            sourceSlotIds = new[] { slots[1].SlotId, slots[0].SlotId }, // deliberately reversed - server re-sorts to binder order
+            startSlotId = dropSlotId,
+        });
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<BulkMoveResultDto>();
+        Assert.Equal(2, result!.Moved);
+
+        var options = new DbContextOptionsBuilder<PokeBinderDbContext>().UseSqlServer(ConnectionString).Options;
+        await using var db = new PokeBinderDbContext(options);
+
+        var sourceA = await db.BinderSlots.FindAsync(slots[0].SlotId);
+        var sourceB = await db.BinderSlots.FindAsync(slots[1].SlotId);
+        Assert.Null(sourceA!.CardVariantId);
+        Assert.Null(sourceB!.CardVariantId);
+
+        var landedAtDrop = await db.BinderSlots.Include(s => s.Page)
+            .FirstAsync(s => s.Page!.BinderId == binder.Id && s.Page.PageNumber == 3 && s.Position == 2);
+        var landedNext = await db.BinderSlots.Include(s => s.Page)
+            .FirstAsync(s => s.Page!.BinderId == binder.Id && s.Page.PageNumber == 3 && s.Position == 3);
+        // Earliest-positioned selected card (slots[0], variant 0) lands exactly on the drop point.
+        Assert.Equal(_cardVariantIds[0], landedAtDrop.CardVariantId);
+        Assert.Equal(_cardVariantIds[1], landedNext.CardVariantId);
+    }
+
+    [Fact]
+    public async Task BulkMove_SkipsSlotsThatAreThemselvesInTheSelection()
+    {
+        var binder = await CreateBinderAsync(_clientA, rows: 1, columns: 4, initialPageCount: 2);
+        var spread = await GetSpreadAsync(_clientA, binder.Id, 0);
+        var slots = spread.RightPanel.Slots!; // page 1, positions 0-3
+
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[0].SlotId}", new { cardVariantId = _cardVariantIds[0] });
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[1].SlotId}", new { cardVariantId = _cardVariantIds[1] });
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[2].SlotId}", new { cardVariantId = _cardVariantIds[2] });
+
+        // Drop point is slots[0] itself - one of the selected sources. Walking forward should skip
+        // past every other selected slot too (1 and 2), landing the block starting at slot 3.
+        var response = await _clientA.PostAsJsonAsync($"/api/binders/{binder.Id}/slots/bulk-move", new
+        {
+            sourceSlotIds = new[] { slots[0].SlotId, slots[1].SlotId, slots[2].SlotId },
+            startSlotId = slots[0].SlotId,
+        });
+        response.EnsureSuccessStatusCode();
+
+        var options = new DbContextOptionsBuilder<PokeBinderDbContext>().UseSqlServer(ConnectionString).Options;
+        await using var db = new PokeBinderDbContext(options);
+
+        var landedAt3 = await db.BinderSlots.Include(s => s.Page)
+            .FirstAsync(s => s.Page!.BinderId == binder.Id && s.Page.PageNumber == 1 && s.Position == 3);
+        var landedAtPage2Pos0 = await db.BinderSlots.Include(s => s.Page)
+            .FirstAsync(s => s.Page!.BinderId == binder.Id && s.Page.PageNumber == 2 && s.Position == 0);
+        var landedAtPage2Pos1 = await db.BinderSlots.Include(s => s.Page)
+            .FirstAsync(s => s.Page!.BinderId == binder.Id && s.Page.PageNumber == 2 && s.Position == 1);
+
+        Assert.Equal(_cardVariantIds[0], landedAt3.CardVariantId);
+        Assert.Equal(_cardVariantIds[1], landedAtPage2Pos0.CardVariantId);
+        Assert.Equal(_cardVariantIds[2], landedAtPage2Pos1.CardVariantId);
+    }
+
+    [Fact]
+    public async Task BulkMove_RunningPastTheLastPage_AutoAddsPages()
+    {
+        var binder = await CreateBinderAsync(_clientA, rows: 1, columns: 2, initialPageCount: 2); // 4 slots total
+        var page1 = await GetSpreadAsync(_clientA, binder.Id, 0);
+        var slots = page1.RightPanel.Slots!;
+        var page2 = await GetSpreadAsync(_clientA, binder.Id, 1);
+        // Page count is even (2), so the last spread is page 2 LEFT + back cover RIGHT (see
+        // CLAUDE.md's binder rendering rules) - page 2's slots are on the left, not the right.
+        var page2Slots = page2.LeftPanel.Slots!;
+
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[0].SlotId}", new { cardVariantId = _cardVariantIds[0] });
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{slots[1].SlotId}", new { cardVariantId = _cardVariantIds[1] });
+        await _clientA.PutAsJsonAsync($"/api/binders/{binder.Id}/slots/{page2Slots[0].SlotId}", new { cardVariantId = _cardVariantIds[2] });
+
+        // Drop point is the last slot in the binder (page2Slots[1]) - moving all 3 selected cards
+        // there needs 3 target slots, but only 1 remains, so the binder must grow.
+        var response = await _clientA.PostAsJsonAsync($"/api/binders/{binder.Id}/slots/bulk-move", new
+        {
+            sourceSlotIds = new[] { slots[0].SlotId, slots[1].SlotId, page2Slots[0].SlotId },
+            startSlotId = page2Slots[1].SlotId,
+        });
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<BulkMoveResultDto>();
+
+        Assert.Equal(3, result!.Moved);
+        Assert.True(result.PagesAdded > 0);
+
+        var binderAfter = await _clientA.GetAsync($"/api/binders/{binder.Id}");
+        binderAfter.EnsureSuccessStatusCode();
+        var summary = await binderAfter.Content.ReadFromJsonAsync<BinderSummaryDto>();
+        Assert.True(summary!.PageCount > 2);
+    }
+
+    [Fact]
+    public async Task BulkMove_UnknownSourceSlot_ReturnsNotFound()
+    {
+        var binder = await CreateBinderAsync(_clientA, rows: 2, columns: 2, initialPageCount: 2);
+        var spread = await GetSpreadAsync(_clientA, binder.Id, 0);
+        var slots = spread.RightPanel.Slots!;
+
+        var response = await _clientA.PostAsJsonAsync($"/api/binders/{binder.Id}/slots/bulk-move", new
+        {
+            sourceSlotIds = new[] { Guid.NewGuid() },
+            startSlotId = slots[0].SlotId,
+        });
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task BulkAssign_Skip_PlacesAroundOccupiedSlots()
     {
         var binder = await CreateBinderAsync(_clientA, rows: 1, columns: 4, initialPageCount: 2);

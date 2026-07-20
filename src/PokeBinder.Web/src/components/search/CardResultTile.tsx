@@ -7,16 +7,19 @@ export function CardResultTile({
   variant,
   selected,
   onToggleSelect,
+  onOpenDetail,
 }: {
   card: CardSearchResult
   variant: VariantSummary
   selected: boolean
   onToggleSelect: () => void
+  onOpenDetail?: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onToggleSelect}
+      onDoubleClick={onOpenDetail}
       aria-pressed={selected}
       aria-label={`${selected ? 'Deselect' : 'Select'} ${card.name} (${variant.variantTypeName})`}
       className={`relative block w-full rounded-lg border p-1.5 text-left transition-colors ${

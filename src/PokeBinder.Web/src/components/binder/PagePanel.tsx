@@ -1,6 +1,6 @@
 import type { PanelSide } from '../../lib/panel-nav'
 import type { CardVariantPrice } from '../../lib/pricing-types'
-import type { BinderSlot, SlotSuggestions, SpreadPanel } from '../../lib/spread-types'
+import type { BinderSlot, EmptySlotSuggestions, SpreadPanel } from '../../lib/spread-types'
 import { Pocket } from './Pocket'
 
 export function PagePanel({
@@ -28,7 +28,7 @@ export function PagePanel({
   greyscaleEnabled: boolean
   overlaysEnabled: boolean
   onOpenSlot: (slot: BinderSlot) => void
-  suggestionsBySlot?: Map<string, SlotSuggestions>
+  suggestionsBySlot?: Map<string, EmptySlotSuggestions>
   onOpenSuggestions?: (slot: BinderSlot) => void
   onToggleOwned?: (slot: BinderSlot) => void
   onQuickRemove?: (slot: BinderSlot) => void

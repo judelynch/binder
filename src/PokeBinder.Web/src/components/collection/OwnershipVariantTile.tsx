@@ -6,23 +6,30 @@ import type { CardSummary, OwnedVariantSummary } from '../../lib/queries/cards'
  * click-to-select interaction. The top-right circle is the transient "selected for the pending
  * bulk mark-owned/unowned action" state (same as CardResultTile's "selected for insert"); the
  * bottom-right badge is the persistent "you already own this" readout - the two are independent
- * booleans, not the same thing, and both need to be visible at once.
+ * booleans, not the same thing, and both need to be visible at once. Double-click opens the full
+ * card detail page (price/chart/history) - single click stays a plain selection toggle so the two
+ * interactions don't fight each other.
  */
 export function OwnershipVariantTile({
   card,
   variant,
   selected,
   onToggleSelect,
+  onOpenDetail,
+  priceGbp,
 }: {
   card: CardSummary
   variant: OwnedVariantSummary
   selected: boolean
   onToggleSelect: () => void
+  onOpenDetail?: () => void
+  priceGbp?: number | null
 }) {
   return (
     <button
       type="button"
       onClick={onToggleSelect}
+      onDoubleClick={onOpenDetail}
       aria-pressed={selected}
       aria-label={`${selected ? 'Deselect' : 'Select'} ${card.name} (${variant.variantTypeName})`}
       className={`relative block w-full rounded-lg border p-1.5 text-left transition-colors ${
@@ -49,6 +56,11 @@ export function OwnershipVariantTile({
         <span className="absolute bottom-1 left-1 truncate rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
           {variant.variantTypeName}
         </span>
+        {priceGbp != null && (
+          <span className="absolute left-1 top-1.5 rounded bg-black/65 px-1 py-0.5 text-[9px] font-bold text-white [font-variant-numeric:tabular-nums]">
+            £{priceGbp.toFixed(2)}
+          </span>
+        )}
       </div>
       <div className="mt-1.5 truncate text-xs font-semibold text-ink">{card.name}</div>
       <div className="truncate text-[10.5px] text-ink-soft">#{card.number}</div>

@@ -167,6 +167,24 @@ export function SearchFilterPanel({
             className="w-24 rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint [font-variant-numeric:tabular-nums] focus:border-accent focus:outline-none"
           />
         </FilterGroup>
+
+        <FilterGroup title="Price" defaultOpen>
+          <label className="mb-2 flex items-center gap-2 text-xs text-ink-soft">
+            <input
+              type="checkbox"
+              checked={filters.hasPriceData}
+              onChange={(e) => onChange({ ...filters, hasPriceData: e.target.checked })}
+              className="h-3.5 w-3.5 accent-[var(--color-accent)]"
+            />
+            Only cards with price data
+          </label>
+          <RangeInput
+            min={filters.priceMin}
+            max={filters.priceMax}
+            unit="£"
+            onChange={(min, max) => onChange({ ...filters, priceMin: min, priceMax: max })}
+          />
+        </FilterGroup>
       </div>
     </div>
   )

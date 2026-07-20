@@ -12,6 +12,7 @@ import { useBinder } from '../lib/queries/binders'
 import { useOverlayTags } from '../lib/queries/overlay-tags'
 import {
   useAppendPages,
+  useBulkMoveSlots,
   useBulkSetOwned,
   useBulkUnassignSlots,
   useMoveSlot,
@@ -24,7 +25,7 @@ import {
 import { clampPanelIndex, formatPanelLabel, formatSpreadLabel, panelIndexToLocation, totalPanels } from '../lib/panel-nav'
 import { useIsMobile } from '../lib/useIsMobile'
 import type { CardVariantPrice } from '../lib/pricing-types'
-import type { BinderSlot, Spread, SlotSuggestions } from '../lib/spread-types'
+import type { BinderSlot, EmptySlotSuggestions, Spread, SlotSuggestions } from '../lib/spread-types'
 
 /** Looks up a slot by id in the current spread, rather than trusting a snapshot taken when a
  * modal was opened - a snapshot goes stale the moment a mutation inside that modal updates the
@@ -108,12 +109,35 @@ export function BinderDetailPage() {
   const unassignSlot = useUnassignSlot(binderId, spreadIndex)
   const bulkSetOwned = useBulkSetOwned(binderId)
   const bulkUnassign = useBulkUnassignSlots(binderId)
+  const bulkMove = useBulkMoveSlots(binderId)
 
+  // Suggestions are computed backend-side per FILLED slot ("based on the card here, try this
+  // next"), but the affordance to act on one only makes sense on the EMPTY slot it would actually
+  // land in (useAddSuggestedCard places into the next empty slot after the source via skip-assign).
+  // This remaps each filled slot's suggestions onto the nearest following empty slot in the
+  // currently-loaded spread, so the lightbulb renders where the card would actually go.
   const suggestionsBySlot = useMemo(() => {
-    const map = new Map<string, SlotSuggestions>()
-    suggestions?.forEach((s) => map.set(s.slotId, s))
-    return map
-  }, [suggestions])
+    const rawBySlot = new Map<string, SlotSuggestions>()
+    suggestions?.forEach((s) => rawBySlot.set(s.slotId, s))
+    if (!spread) return new Map<string, EmptySlotSuggestions>()
+
+    const flattened = [...(spread.leftPanel.slots ?? []), ...(spread.rightPanel.slots ?? [])]
+    const result = new Map<string, EmptySlotSuggestions>()
+    const claimedEmptySlotIds = new Set<string>()
+
+    flattened.forEach((filledSlot, index) => {
+      const raw = rawBySlot.get(filledSlot.slotId)
+      if (!raw || raw.suggestions.length === 0 || !filledSlot.card) return
+
+      const nextEmpty = flattened.slice(index + 1).find((s) => !s.card && !claimedEmptySlotIds.has(s.slotId))
+      if (!nextEmpty) return
+
+      claimedEmptySlotIds.add(nextEmpty.slotId)
+      result.set(nextEmpty.slotId, { slotId: nextEmpty.slotId, suggestions: raw.suggestions, basedOnCardName: filledSlot.card.name })
+    })
+
+    return result
+  }, [suggestions, spread])
 
   const priceByCardVariantId = useMemo(() => {
     const map = new Map<string, CardVariantPrice>()
@@ -184,6 +208,10 @@ export function BinderDetailPage() {
     moveSlot.mutate({ slotId: sourceSlotId, targetSlotId })
   }
 
+  function handleBulkMoveSlots(sourceSlotIds: string[], startSlotId: string) {
+    bulkMove.mutate({ sourceSlotIds, startSlotId }, { onSuccess: () => setSelectedSlotIds(new Set()) })
+  }
+
   function handleToggleOwned(slot: BinderSlot) {
     updateSlotState.mutate({ slotId: slot.slotId, owned: !slot.owned })
   }
@@ -243,6 +271,7 @@ export function BinderDetailPage() {
       overlaysEnabled={overlaysEnabled}
       onOpenSlot={handleOpenSlot}
       onMoveSlot={handleMoveSlot}
+      onBulkMoveSlots={handleBulkMoveSlots}
       suggestionsBySlot={suggestionsBySlot}
       onOpenSuggestions={setSuggestingSlot}
       onToggleOwned={handleToggleOwned}
@@ -322,6 +351,7 @@ export function BinderDetailPage() {
         <SuggestionModal
           slot={suggestingSlot}
           suggestions={suggestionsBySlot.get(suggestingSlot.slotId)?.suggestions ?? []}
+          basedOnCardName={suggestionsBySlot.get(suggestingSlot.slotId)?.basedOnCardName ?? ''}
           binderId={binderId}
           spreadIndex={spreadIndex}
           onClose={() => setSuggestingSlot(null)}

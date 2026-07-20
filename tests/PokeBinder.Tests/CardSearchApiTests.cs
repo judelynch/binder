@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using PokeBinder.Api.Dtos;
+using PokeBinder.Core.Pricing;
 using PokeBinder.Infrastructure;
 using Xunit;
 
@@ -208,6 +209,51 @@ public class CardSearchApiTests : IAsyncLifetime
         var result = await SearchAsync("name=char");
         var variantNames = result.Items[0].Variants.Select(v => v.VariantTypeName).ToList();
         Assert.Equal("Normal", variantNames[0]);
+    }
+
+    private async Task SeedPriceAsync(string cardId, decimal itemOnlyGbp)
+    {
+        var options = new DbContextOptionsBuilder<PokeBinderDbContext>().UseSqlServer(ConnectionString).Options;
+        await using var db = new PokeBinderDbContext(options);
+        var variantId = await db.CardVariants.Where(v => v.CardId == cardId).Select(v => v.Id).FirstAsync();
+        db.PricePoints.Add(new PricePoint
+        {
+            Id = Guid.NewGuid(),
+            CardVariantId = variantId,
+            GradedStatus = GradedStatus.Raw,
+            Condition = RawConditionClassification.NM,
+            WindowDays = 30,
+            ItemOnlyMedianGbp = itemOnlyGbp,
+            DeliveredMedianGbp = itemOnlyGbp + 1,
+            SampleCount = 3,
+            MinGbp = itemOnlyGbp,
+            MaxGbp = itemOnlyGbp,
+            LastSaleDate = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task PriceRange_FiltersByBestAvailablePrice()
+    {
+        await SeedPriceAsync("search-1", 5.00m); // Pikachu - in range
+        await SeedPriceAsync("search-2", 500.00m); // Charizard - out of range
+
+        var result = await SearchAsync("priceMin=1&priceMax=10");
+
+        Assert.Single(result.Items);
+        Assert.Equal("search-1", result.Items[0].Id);
+    }
+
+    [Fact]
+    public async Task HasPriceData_ExcludesCardsWithNoPricePoints()
+    {
+        await SeedPriceAsync("search-1", 5.00m); // only Pikachu is priced
+
+        var result = await SearchAsync("hasPriceData=true");
+
+        Assert.Single(result.Items);
+        Assert.Equal("search-1", result.Items[0].Id);
     }
 
     private record TokenOnly(string Token);

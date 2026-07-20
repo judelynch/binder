@@ -75,6 +75,22 @@ into a fuller Pokémon TCG website later — keep the architecture open to that.
   greyscale (CSS filter). A global toggle switches the greyscale treatment on/off.
 - Overlay tags render as a translucent colour wash + small label chip on the slot,
   with a legend, and a global toggle to show/hide overlays.
+- Moving a card: drag-and-drop within the loaded spread swaps two slots directly
+  (POST /slots/{id}/move). Moving further than the two pages on screen is done by
+  dragging toward the left/right edge of the viewport and holding — a visible
+  arrow panel lights up there (BinderFrame's EdgeTurnPanel) and the spread keeps
+  turning one page per ~650ms for as long as the pointer stays in that zone, until
+  released, dropped, or the binder's start/end is hit. This works because dnd-kit's
+  DragOverlay keeps the dragged card's visual independent of the underlying slot,
+  which is free to unmount/remount as pages turn.
+- Select mode + drag: selecting several cards then dragging any ONE of the
+  selected slots moves the WHOLE selection together (POST /slots/bulk-move) —
+  the earliest-positioned selected card lands exactly on the drop point, the
+  rest follow in their original relative order. Dragging a card that isn't part
+  of the current selection (even with select mode on) just moves that one card
+  normally. Every placement is a full swap — nothing on the destination pages is
+  ever lost, displaced cards swap back into the vacated source slots — and the
+  binder auto-adds pages if the selection runs past the last existing slot.
 
 ## Set & card browsing, collection tracking
 - /sets: grid of every set (logo, series, card count, completion %),
@@ -87,7 +103,15 @@ into a fuller Pokémon TCG website later — keep the architecture open to that.
 - /cards/:cardId: full card reference stats (attacks, abilities,
   weaknesses, resistances, retreat cost, etc. — previously imported but
   never exposed via the API) plus the current user's own
-  ownership/quantity/condition per variant.
+  ownership/quantity/condition per variant. Two tabs: Overview (the stats
+  above) and Market price (per-variant price summary + trend chart + full
+  newest-first sale history — see Pricing module below). Reached either by
+  navigating directly or by double-clicking a card tile on the set page or
+  the advanced search page.
+- Set page and advanced search tiles show a best-available price badge when
+  price data exists (OwnershipVariantTile / CardResultTile), and support a
+  double-click to open the card detail page (single click stays a plain
+  selection toggle for the existing bulk-act flows).
 - Set completion rule: a card counts as "complete" once the user owns
   every variant of it EXCEPT variants whose VariantType.Name contains
   "Stamp" (e.g. a "Promo Stamp" variant doesn't block completion). This
@@ -96,6 +120,62 @@ into a fuller Pokémon TCG website later — keep the architecture open to that.
   (lib/setCompletion.ts) — keep both in sync if it ever changes, and
   always match case-insensitively (don't rely on the database's default
   collation for that).
+
+## Pricing module
+- Goal: a confidence-aware eBay UK sold-price pipeline, built end-to-end
+  against a fixture-fed IPriceSourceProvider (MockPriceSourceProvider) —
+  deliberately NOT a live eBay scraper (that would violate eBay's ToS).
+  A real provider drops in later behind the same interface with zero
+  pipeline changes.
+- Pipeline: PricingScrapeOrchestrator (Hangfire job body) pulls listings
+  per card-variant → IListingClassifier scores each one (identity/variant/
+  grading/condition/language match) into AutoAccepted / Quarantined /
+  Rejected → IPriceAggregator buckets AutoAccepted listings by
+  (GradedStatus[/Grader/Grade or Condition] × 30/60/90-day window) and
+  takes a robust (outlier-trimmed) median → PricePoint rows.
+  "Best-available price" = the cheapest published raw (non-graded) bucket
+  for a variant — this single rule is reused everywhere a price is shown
+  (binder cost-to-buy badges, binder/dashboard totals, set/search tile
+  badges, card detail's headline price).
+- Scope is global (every CardVariantId referenced by any BinderSlot across
+  all users), not per-user — price is a shared fact about a physical card.
+- Scheduling: Hangfire + SQL Server storage. Nightly recurring job, a
+  login-triggered catch-up (AuthController, admin logins only, only if
+  nothing completed in the last 24h), and manual "Run now" / "Scrape this
+  card now" from the admin Pricing runs tab. Dashboard at /hangfire is
+  restricted to localhost requests only (this API is JWT-only, no cookie
+  auth for Hangfire's own dashboard auth to check).
+- Quarantined listings go to an admin review queue (Admin → Pricing queue):
+  approve as-is, reclassify (correct the grading/condition guess), reject,
+  or bulk-act across a multi-select. Every action writes a
+  ClassificationFeedback audit row and re-triggers aggregation for the
+  affected variant immediately.
+- Dev-only tuning: appsettings.Development.json has a Pricing:Scrape
+  override (near-zero BatchPauseSeconds/RequestDelaySeconds/
+  RequestJitterMaxSeconds) so local runs finish in seconds — production
+  defaults in PricingScrapeOptions are deliberately paced like a real,
+  rate-limit-conscious client even though the mock provider doesn't need
+  it, so that timing behaviour doesn't need to change later.
+
+## Smart suggestions
+- SuggestionEngine (PokeBinder.Core.Binders) looks at the WHOLE binder
+  first to decide what it's "about" — one dominant set, one dominant
+  Pokémon name, or one dominant rarity+type / rarity+supertype combo —
+  and generates every suggestion from that single story, rather than
+  running independent heuristics per placed card (which read as random).
+  The dominant category is whichever has the single largest group of
+  placed cards sharing that key, no fixed threshold (plurality wins); ties
+  break set > name > rarity+type > rarity+supertype (the narrower
+  type-matched grouping beats the broader supertype one when they tie,
+  which happens whenever every placed card of a shared rarity also shares
+  one element type).
+- Set theme: suggests the immediate missing neighbour on BOTH sides of
+  every placed card in that set (122 and 124 for a placed 123), not just
+  the next one.
+- The lightbulb affordance only ever renders on EMPTY slots (frontend
+  remaps each filled slot's backend-computed suggestion onto the nearest
+  following empty slot in the loaded spread — see BinderDetailPage's
+  suggestionsBySlot) since that's where "Add" actually places the card.
 
 ## Non-negotiable engineering rules
 - Any "select many, then act" UI flow (bulk mark owned/unowned, bulk

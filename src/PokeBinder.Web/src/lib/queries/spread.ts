@@ -143,6 +143,7 @@ export function useMoveSlot(binderId: string, spreadIndex: number) {
         const swappedSource: BinderSlot = {
           ...source,
           card: target.card,
+          cardVariantId: target.cardVariantId,
           variantTypeName: target.variantTypeName,
           owned: target.owned,
           quantity: target.quantity,
@@ -152,6 +153,7 @@ export function useMoveSlot(binderId: string, spreadIndex: number) {
         const swappedTarget: BinderSlot = {
           ...target,
           card: source.card,
+          cardVariantId: source.cardVariantId,
           variantTypeName: source.variantTypeName,
           owned: source.owned,
           quantity: source.quantity,
@@ -222,6 +224,24 @@ export function useBulkUnassignSlots(binderId: string) {
   return useMutation({
     mutationFn: async (slotIds: string[]) =>
       (await api.post<{ updated: number }>(`/binders/${binderId}/slots/bulk-unassign`, { slotIds })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['spread-suggestions', binderId] })
+      invalidateSpreadAndSummaries(queryClient, binderId)
+    },
+  })
+}
+
+/** Drags a whole multi-selection onto a single dropped-on slot at once - the earliest-positioned
+ * selected card lands exactly on the drop point, the rest follow in their original relative order.
+ * Same cross-page pattern as the other bulk operations above: no optimistic update, just invalidate. */
+export function useBulkMoveSlots(binderId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ sourceSlotIds, startSlotId }: { sourceSlotIds: string[]; startSlotId: string }) =>
+      (await api.post<{ moved: number; pagesAdded: number }>(`/binders/${binderId}/slots/bulk-move`, {
+        sourceSlotIds,
+        startSlotId,
+      })).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['spread-suggestions', binderId] })
       invalidateSpreadAndSummaries(queryClient, binderId)

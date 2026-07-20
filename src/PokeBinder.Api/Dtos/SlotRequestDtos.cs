@@ -6,6 +6,10 @@ public record AssignCardRequest([Required] Guid CardVariantId);
 
 public record MoveSlotRequest([Required] Guid TargetSlotId);
 
+public record BulkMoveRequest([Required, MinLength(1)] IReadOnlyList<Guid> SourceSlotIds, [Required] Guid StartSlotId);
+
+public record BulkMoveResultDto(int Moved, int PagesAdded);
+
 public record UpdateSlotStateRequest(bool? Owned, int? Quantity, string? Condition);
 
 public record SetOverlayTagRequest(Guid? OverlayTagId);

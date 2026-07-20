@@ -163,6 +163,90 @@ public class SlotsController : ControllerBase
             return NotFound();
         }
 
+        return Ok(await SwapSlotsAsync(source, target, ct));
+    }
+
+    /// <summary>
+    /// Moves a whole multi-selection at once, dropped via drag onto a single real slot (StartSlotId
+    /// - always a concrete slot the user actually released over, however many pages they turned to
+    /// get there). SourceSlotIds are re-sorted into binder order first, so the earliest-positioned
+    /// selected card always lands exactly on the drop point regardless of which one was physically
+    /// dragged, and the rest follow it in their original relative order. Walking forward from the
+    /// drop point skips any slot that is itself one of the sources (that source's own destination is
+    /// resolved separately in the same batch) and auto-extends the binder with new pages if the
+    /// selection runs past the last existing slot. Every (source, target) pair is a full swap, same
+    /// as the single-card Move above, so nothing already on the destination pages is ever lost -
+    /// displaced cards simply swap back into the vacated source slots.
+    /// </summary>
+    [HttpPost("bulk-move")]
+    public async Task<ActionResult<BulkMoveResultDto>> BulkMove(Guid binderId, BulkMoveRequest request, CancellationToken ct)
+    {
+        var userId = this.GetUserId();
+        var binder = await _db.Binders
+            .Include(b => b.Pages).ThenInclude(p => p.Slots)
+            .FirstOrDefaultAsync(b => b.Id == binderId && b.OwnerId == userId, ct);
+        if (binder is null)
+        {
+            return NotFound();
+        }
+
+        var orderedSlots = binder.Pages.OrderBy(p => p.PageNumber).SelectMany(p => p.Slots.OrderBy(s => s.Position)).ToList();
+        var orderIndex = orderedSlots.Select((s, i) => (s.Id, Index: i)).ToDictionary(x => x.Id, x => x.Index);
+
+        var requestedIds = request.SourceSlotIds.Distinct().ToList();
+        if (requestedIds.Any(id => !orderIndex.ContainsKey(id)) || !orderIndex.ContainsKey(request.StartSlotId))
+        {
+            return NotFound();
+        }
+
+        var sourceIds = requestedIds.OrderBy(id => orderIndex[id]).ToList();
+
+        var sourceSet = new HashSet<Guid>(sourceIds);
+        var targetIds = new List<Guid>();
+        var pagesAdded = 0;
+        var cursor = orderIndex[request.StartSlotId];
+
+        while (targetIds.Count < sourceIds.Count)
+        {
+            if (cursor >= orderedSlots.Count)
+            {
+                var nextPageNumber = binder.Pages.Count == 0 ? 1 : binder.Pages.Max(p => p.PageNumber) + 1;
+                BinderPageFactory.AppendPages(_db, binder, nextPageNumber, 2);
+                pagesAdded += 2;
+                orderedSlots = binder.Pages.OrderBy(p => p.PageNumber).SelectMany(p => p.Slots.OrderBy(s => s.Position)).ToList();
+            }
+
+            var candidate = orderedSlots[cursor];
+            cursor++;
+            if (!sourceSet.Contains(candidate.Id))
+            {
+                targetIds.Add(candidate.Id);
+            }
+        }
+
+        var involvedIds = sourceIds.Concat(targetIds).ToHashSet();
+        var slotsById = orderedSlots.Where(s => involvedIds.Contains(s.Id)).ToDictionary(s => s.Id);
+        var snapshot = slotsById.ToDictionary(
+            kv => kv.Key,
+            kv => (kv.Value.CardVariantId, kv.Value.Owned, kv.Value.Quantity, kv.Value.Condition, kv.Value.OverlayTagId));
+
+        for (var i = 0; i < sourceIds.Count; i++)
+        {
+            var source = slotsById[sourceIds[i]];
+            var target = slotsById[targetIds[i]];
+            var sourceOld = snapshot[sourceIds[i]];
+            var targetOld = snapshot[targetIds[i]];
+
+            (target.CardVariantId, target.Owned, target.Quantity, target.Condition, target.OverlayTagId) = sourceOld;
+            (source.CardVariantId, source.Owned, source.Quantity, source.Condition, source.OverlayTagId) = targetOld;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new BulkMoveResultDto(sourceIds.Count, pagesAdded));
+    }
+
+    private async Task<object> SwapSlotsAsync(BinderSlot source, BinderSlot target, CancellationToken ct)
+    {
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         (source.CardVariantId, target.CardVariantId) = (target.CardVariantId, source.CardVariantId);
@@ -177,7 +261,7 @@ public class SlotsController : ControllerBase
         await ReloadSlotDetailsAsync(source, ct);
         await ReloadSlotDetailsAsync(target, ct);
 
-        return Ok(new { source = SlotMapping.ToDto(source), target = SlotMapping.ToDto(target) });
+        return new { source = SlotMapping.ToDto(source), target = SlotMapping.ToDto(target) };
     }
 
     [HttpPost("bulk-assign")]

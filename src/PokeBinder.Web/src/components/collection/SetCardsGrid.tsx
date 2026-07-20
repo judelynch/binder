@@ -16,10 +16,14 @@ export function SetCardsGrid({
   cards,
   selectedIds,
   onToggleSelect,
+  onOpenCard,
+  priceByVariantId,
 }: {
   cards: CardSummary[]
   selectedIds: ReadonlySet<string>
   onToggleSelect: (variantId: string) => void
+  onOpenCard?: (cardId: string) => void
+  priceByVariantId?: Map<string, number>
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const columns = useColumnCount()
@@ -69,6 +73,8 @@ export function SetCardsGrid({
                       variant={variant}
                       selected={selectedIds.has(item.variantId)}
                       onToggleSelect={() => onToggleSelect(item.variantId)}
+                      onOpenDetail={onOpenCard ? () => onOpenCard(item.card.id) : undefined}
+                      priceGbp={priceByVariantId?.get(item.variantId)}
                     />
                   )
                 })}

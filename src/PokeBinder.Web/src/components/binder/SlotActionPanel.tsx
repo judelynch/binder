@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Modal } from '../Modal'
 import { useOverlayTags } from '../../lib/queries/overlay-tags'
 import { useSetOverlayTag, useUnassignSlot, useUpdateSlotState } from '../../lib/queries/spread'
@@ -120,6 +121,9 @@ export function SlotActionPanel({
               {slot.card.rarity ? ` · ${slot.card.rarity}` : ''}
             </div>
             {slot.variantTypeName && <div className="mt-0.5 text-sm text-ink-faint">{slot.variantTypeName}</div>}
+            <Link to={`/cards/${slot.card.id}`} className="mt-1.5 inline-block text-xs font-semibold text-accent">
+              View card details →
+            </Link>
           </div>
         </div>
 
